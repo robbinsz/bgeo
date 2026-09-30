@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="scroll-smooth">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GeoPilot · 企业级生成式引擎优化 (GEO) 平台 | 抢占 AI 问答推荐首位</title>
+  <meta name="description" content="GeoPilot 是一套面向企业与品牌的 GEO (Generative Engine Optimization) 自动化运营平台。持续监测主流 AI 问答表现，诊断机会，编排可信内容，复测因果成效，构建自进化商业增长闭环。">
+  
+  <!-- Favicon -->
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232f5fd0'/%3E%3Cpath d='M43 21a17 17 0 1 0 4 17' fill='none' stroke='white' stroke-width='7' stroke-linecap='round'/%3E%3Cpath d='m40 14 8 6-8 6' fill='none' stroke='%23cfe0ff' stroke-width='6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+
+  <!-- Google Fonts & Tailwind CSS CDN -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Lucide Icons CDN -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['"Plus Jakarta Sans"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
+          },
+          colors: {
+            brand: {
+              50: '#f0f4ff',
+              100: '#e0eaff',
+              200: '#c7d8fe',
+              300: '#a4bffe',
+              400: '#7a9dfc',
+              500: '#4c63ff',
+              600: '#2f5fd0',
+              700: '#244da9',
+              800: '#1b3a82',
+              900: '#162e65',
+              glow: '#6e7cff',
+            },
+            dark: {
+              950: '#07090f',
+              900: '#0b1020',
+              850: '#10172e',
+              800: '#151e3c',
+              750: '#1b264b',
+              700: '#243261',
+            },
+            cyanAccent: {
+              400: '#25c4cf',
+              500: '#1ca5af',
+            },
+            mint: '#3dd9a3',
+            amber: '#f59e0b',
+          },
+          animation: {
+            'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+            'float': 'float 6s ease-in-out infinite',
+          },
+          keyframes: {
+            float: {
+              '0%, 100%': { transform: 'translateY(0px)' },
+              '50%': { transform: 'translateY(-8px)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    /* Custom Scrollbar & Glows */
+    ::-webkit-scrollbar { width: 8px; }
+    ::-webkit-scrollbar-track { background: #07090f; }
+    ::-webkit-scrollbar-thumb { background: #1f2947; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #2f5fd0; }
+    
+    .glass-nav {
+      background: rgba(11, 16, 32, 0.82);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .glass-card {
+      background: rgba(16, 23, 46, 0.65);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(255, 255, 255, 0.07);
+    }
+    .glass-card:hover {
+      border-color: rgba(76, 99, 255, 0.35);
+    }
+    .gradient-border {
+      position: relative;
+    }
+    .gradient-border::before {
+      content: '';
+      position: absolute;
+      inset: -1px;
+      border-radius: inherit;
+      padding: 1px;
+      background: linear-gradient(135deg, rgba(76,99,255,0.6), rgba(37,196,207,0.3), rgba(255,255,255,0.05));
+      -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+      -webkit-mask-composite: xor;
+      mask-composite: exclude;
+      pointer-events: none;
+    }
+    .hero-glow {
+      background: radial-gradient(circle 500px at 50% 10%, rgba(76, 99, 255, 0.18), transparent 70%);
+    }
+    .mesh-gradient {
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(47, 95, 208, 0.15) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(37, 196, 207, 0.1) 0px, transparent 50%);
+    }
+  </style>
+</head>
+
+<body class="bg-dark-950 text-slate-100 font-sans antialiased selection:bg-brand-500 selection:text-white overflow-x-hidden">
+
+  <!-- ============================================================ -->
+  <!-- 顶部导航栏 (Navbar) -->
+  <!-- ============================================================ -->
+  <header class="fixed top-0 inset-x-0 z-50 glass-nav transition-all duration-300" id="navbar">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between">
+      
+      <!-- Brand Logo -->
+      <a href="#" class="flex items-center gap-3 group">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-brand-600 via-brand-500 to-cyanAccent-400 p-[1px] shadow-lg shadow-brand-500/20 group-hover:scale-105 transition-transform">
+          <div class="w-full h-full bg-dark-900 rounded-[11px] flex items-center justify-center">
+            <svg class="w-6 h-6 text-brand-400" viewBox="0 0 64 64" fill="none">
+              <path d="M43 21a17 17 0 1 0 4 17" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+              <path d="m40 14 8 6-8 6" stroke="#25c4cf" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </div>
+        </div>
+        <div class="flex flex-col">
+          <div class="flex items-center gap-2">
+            <span class="text-xl font-extrabold tracking-tight text-white group-hover:text-brand-300 transition-colors">GeoPilot</span>
+            <span class="px-1.5 py-0.5 text-[10px] font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30 rounded uppercase tracking-wider">GEO OS</span>
+          </div>
+          <span class="text-[11px] text-slate-400 font-mono">bgeo.cc · 自进化运营平台</span>
+        </div>
+      </a>
+
+      <!-- Desktop Nav Menu -->
+      <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-300">
+        <a href="#why-geo" class="hover:text-white transition-colors">为何需要 GEO</a>
+        <a href="#features" class="hover:text-white transition-colors">核心引擎</a>
+        <a href="#evolution-loop" class="hover:text-white transition-colors">7步闭环机制</a>
+        <a href="#simulator" class="hover:text-white transition-colors flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-cyanAccent-400 animate-pulse"></span>
+          效果透视
+        </a>
+        <a href="#pricing" class="hover:text-white transition-colors">方案定价</a>
+        <a href="#faq" class="hover:text-white transition-colors">常见问答</a>
+      </nav>
+
+      <!-- Action Buttons -->
+      <div class="flex items-center gap-3">
+        <!-- 免费诊断 CTA (弹出预约框) -->
+        <button onclick="openModal('auditModal')" class="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-semibold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 transition">
+          <i data-lucide="sparkles" class="w-3.5 h-3.5 text-cyanAccent-400"></i>
+          免费品牌诊断
+        </button>
+
+        <!-- ★ 核心要求：登录项目管理页面入口链接 ★ -->
+        <a href="/login" id="nav-login-btn" class="relative group inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-lg text-xs sm:text-sm font-semibold text-white bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-md shadow-brand-500/25 hover:shadow-brand-500/40 transition-all duration-200">
+          <i data-lucide="layout-dashboard" class="w-4 h-4 text-brand-200"></i>
+          <span>登录项目管理</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"></i>
+        </a>
+
+        <!-- Mobile Menu Toggle Button -->
+        <button id="mobile-menu-btn" class="md:hidden p-2 rounded-lg text-slate-400 hover:text-white hover:bg-white/5">
+          <i data-lucide="menu" class="w-6 h-6"></i>
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Mobile Dropdown -->
+    <div id="mobile-menu" class="hidden md:hidden px-4 pt-3 pb-6 border-t border-white/10 bg-dark-900/95 backdrop-blur-xl">
+      <div class="flex flex-col gap-3 text-sm">
+        <a href="#why-geo" class="py-2 text-slate-300 hover:text-white">为何需要 GEO</a>
+        <a href="#features" class="py-2 text-slate-300 hover:text-white">核心引擎</a>
+        <a href="#evolution-loop" class="py-2 text-slate-300 hover:text-white">7步闭环机制</a>
+        <a href="#simulator" class="py-2 text-slate-300 hover:text-white">效果对比透视</a>
+        <a href="#pricing" class="py-2 text-slate-300 hover:text-white">方案定价</a>
+        <a href="#faq" class="py-2 text-slate-300 hover:text-white">常见问答</a>
+        <div class="pt-3 border-t border-white/10 flex flex-col gap-2">
+          <button onclick="openModal('auditModal')" class="w-full py-2.5 rounded-lg text-center font-medium bg-white/5 text-slate-200 border border-white/10">
+            免费申请品牌 AI 可见度诊断
+          </button>
+          <a href="/login" class="w-full py-2.5 rounded-lg text-center font-medium bg-brand-600 text-white flex items-center justify-center gap-2">
+            <i data-lucide="log-in" class="w-4 h-4"></i>
+            进入项目管理控制台
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ============================================================ -->
+  <!-- HERO 区域：商业营销冲击力 + 明确价值主张 -->
+  <!-- ============================================================ -->
+  <section class="relative pt-36 pb-24 md:pt-44 md:pb-32 hero-glow mesh-gradient overflow-hidden">
+    
+    <!-- Background Animated Decor -->
+    <div class="absolute top-1/4 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[350px] bg-brand-500/15 blur-[120px] pointer-events-none rounded-full"></div>
+    <div class="absolute top-1/3 left-1/4 w-[300px] h-[300px] bg-cyanAccent-400/10 blur-[90px] pointer-events-none rounded-full"></div>
+
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
+      
+      <!-- Top Announcement Badge -->
+      <div class="flex justify-center mb-6">
+        <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full text-xs font-medium bg-gradient-to-r from-brand-500/10 via-brand-500/20 to-cyanAccent-400/10 border border-brand-500/30 text-brand-300 backdrop-blur-md shadow-sm">
+          <span class="flex h-2 w-2 relative">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyanAccent-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-cyanAccent-400"></span>
+          </span>
+          <span>新一代搜索范式革命 · Generative Engine Optimization</span>
+          <span class="text-slate-500">|</span>
+          <span class="text-slate-300">告别传统 SEO 流量滑坡</span>
+          <i data-lucide="chevron-right" class="w-3.5 h-3.5 text-brand-400"></i>
+        </div>
+      </div>
+
+      <!-- Main Headline -->
+      <div class="text-center max-w-4xl mx-auto">
+        <h1 class="text-4xl sm:text-5xl lg:text-6xl font-extrabold tracking-tight text-white leading-[1.15] mb-6">
+          当潜在客户向 AI 提问时，<br>
+          <span class="bg-gradient-to-r from-blue-400 via-indigo-300 to-cyan-300 bg-clip-text text-transparent">
+            你的品牌是权威首选，还是根本隐形？
+          </span>
+        </h1>
+        
+        <p class="text-lg sm:text-xl text-slate-300 font-normal leading-relaxed mb-10 max-w-3xl mx-auto">
+          在 ChatGPT、Perplexity、DeepSeek 和 Claude 时代，用户不再点击传统搜索网页。
+          <strong class="text-white font-semibold">GeoPilot (bgeo)</strong> 
+          提供企业级 GEO 自进化运营闭环：从事实核验、多模型监测、意图诊断到策略生成与因果复测，让 AI 问答持续主动推荐你的产品。
+        </p>
+
+        <!-- CTA Buttons Group -->
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-4 mb-14">
+          <!-- 诊断呼召 -->
+          <button onclick="openModal('auditModal')" class="w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-brand-600 via-brand-500 to-indigo-600 hover:from-brand-500 hover:to-indigo-500 shadow-xl shadow-brand-500/25 hover:shadow-brand-500/40 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2 group">
+            <i data-lucide="zap" class="w-4 h-4 text-cyanAccent-400 fill-cyanAccent-400"></i>
+            <span>立即获取品牌 AI 可见度诊断</span>
+            <i data-lucide="arrow-right" class="w-4 h-4 group-hover:translate-x-1 transition-transform"></i>
+          </button>
+          
+          <!-- 项目管理登录直通车 -->
+          <a href="/login" class="w-full sm:w-auto px-7 py-4 rounded-xl text-sm font-semibold text-slate-200 bg-dark-850 hover:bg-dark-800 border border-slate-700 hover:border-slate-500 hover:-translate-y-0.5 transition-all flex items-center justify-center gap-2.5">
+            <i data-lucide="shield-check" class="w-4 h-4 text-brand-400"></i>
+            <span>登录项目管理控制台</span>
+            <span class="text-xs py-0.5 px-2 bg-brand-500/20 text-brand-300 rounded-full font-mono">bgeo.cc</span>
+          </a>
+        </div>
+
+        <!-- Social Proof Numbers -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-4xl mx-auto pt-6 border-t border-white/10 text-left">
+          <div class="p-3">
+            <div class="text-2xl sm:text-3xl font-extrabold text-white font-mono flex items-center">
+              <span>+320%</span>
+              <i data-lucide="trending-up" class="w-5 h-5 text-mint ml-1.5"></i>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">AI 权威答案平均信源引用增幅</div>
+          </div>
+          <div class="p-3">
+            <div class="text-2xl sm:text-3xl font-extrabold text-white font-mono flex items-center">
+              <span>81.4%</span>
+              <span class="text-xs text-brand-300 font-sans ml-1">首选</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">目标商业提问首推位占领比</div>
+          </div>
+          <div class="p-3">
+            <div class="text-2xl sm:text-3xl font-extrabold text-cyanAccent-400 font-mono">
+              <span>&lt;0.05%</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">严格事实核验，杜绝品牌幻觉</div>
+          </div>
+          <div class="p-3">
+            <div class="text-2xl sm:text-3xl font-extrabold text-white font-mono">
+              <span>95%</span>
+              <span class="text-xs text-purple-300 font-sans ml-1">置信</span>
+            </div>
+            <div class="text-xs text-slate-400 mt-1">双批次配对科学因果复测验证</div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Live AI Engine Trust Bar -->
+      <div class="mt-14 pt-8 text-center">
+        <p class="text-xs uppercase tracking-widest text-slate-500 font-semibold mb-6">
+          全面覆盖主流生成式 AI 引擎与对话推荐生态
+        </p>
+        <div class="flex flex-wrap items-center justify-center gap-6 sm:gap-10 opacity-75 grayscale hover:grayscale-0 transition-all duration-300">
+          <div class="flex items-center gap-2 text-slate-300 text-sm font-semibold">
+            <span class="w-6 h-6 rounded-md bg-[#10a37f] flex items-center justify-center text-white text-xs font-bold">GPT</span>
+            ChatGPT / SearchGPT
+          </div>
+          <div class="flex items-center gap-2 text-slate-300 text-sm font-semibold">
+            <span class="w-6 h-6 rounded-md bg-[#1fb8cd] flex items-center justify-center text-white text-xs font-bold">P</span>
+            Perplexity AI
+          </div>
+          <div class="flex items-center gap-2 text-slate-300 text-sm font-semibold">
+            <span class="w-6 h-6 rounded-md bg-[#4d6bfe] flex items-center justify-center text-white text-xs font-bold">DS</span>
+            DeepSeek
+          </div>
+          <div class="flex items-center gap-2 text-slate-300 text-sm font-semibold">
+            <span class="w-6 h-6 rounded-md bg-[#d97706] flex items-center justify-center text-white text-xs font-bold">C</span>
+            Claude 3.5
+          </div>
+          <div class="flex items-center gap-2 text-slate-300 text-sm font-semibold">
+            <span class="w-6 h-6 rounded-md bg-[#8b5cf6] flex items-center justify-center text-white text-xs font-bold">G</span>
+            Google Gemini
+          </div>
+          <div class="flex items-center gap-2 text-slate-300 text-sm font-semibold">
+            <span class="w-6 h-6 rounded-md bg-[#2563eb] flex items-center justify-center text-white text-xs font-bold">K</span>
+            Kimi 智能助手
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 互动式对比模拟器 (Interactive AI Answer Simulator) -->
+  <!-- 营销重点：用直观证据击中决策者心智 -->
+  <!-- ============================================================ -->
+  <section id="simulator" class="py-20 bg-dark-900 border-y border-white/5 relative">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="text-center max-w-3xl mx-auto mb-12">
+        <div class="inline-flex items-center gap-1.5 text-xs font-bold text-cyanAccent-400 uppercase tracking-widest mb-3">
+          <i data-lucide="eye" class="w-4 h-4"></i>
+          真实场景模拟透视
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          看看在 AI 问答中，你的品牌正在经历什么
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base mt-3">
+          当企业决策者向大模型提出商业采购需求，AI 的单次回答将决定数十万乃至上百万的商机归属。
+        </p>
+      </div>
+
+      <!-- Scenario Selector Tabs -->
+      <div class="flex justify-center mb-8">
+        <div class="inline-flex p-1 rounded-xl bg-dark-800 border border-white/10" id="scenario-tabs">
+          <button onclick="switchScenario('crm')" id="tab-crm" class="scenario-btn active px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition text-white bg-brand-600 shadow">
+            场景 1: 企业级 CRM / 企服选型
+          </button>
+          <button onclick="switchScenario('logistics')" id="tab-logistics" class="scenario-btn px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition text-slate-400 hover:text-white">
+            场景 2: 跨境供应链服务商
+          </button>
+          <button onclick="switchScenario('security')" id="tab-security" class="scenario-btn px-4 py-2 rounded-lg text-xs sm:text-sm font-medium transition text-slate-400 hover:text-white">
+            场景 3: 数据安全与合规系统
+          </button>
+        </div>
+      </div>
+
+      <!-- Comparative Dual Window Display -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 items-stretch">
+        
+        <!-- Left: 未做 GEO 优化 (现状惨痛) -->
+        <div class="rounded-2xl bg-dark-950/90 border border-red-500/20 p-6 flex flex-col justify-between relative overflow-hidden group">
+          <div class="absolute top-0 right-0 bg-red-500/10 border-b border-l border-red-500/20 px-4 py-1 rounded-bl-xl text-[11px] font-semibold text-red-400 flex items-center gap-1.5">
+            <i data-lucide="alert-triangle" class="w-3.5 h-3.5"></i>
+            传统现状：未做 GEO 优化
+          </div>
+
+          <div>
+            <!-- Prompt bar -->
+            <div class="flex items-center gap-2 p-3 rounded-lg bg-dark-800/80 border border-white/5 mb-4 text-xs font-mono text-slate-300">
+              <i data-lucide="terminal" class="w-4 h-4 text-slate-400"></i>
+              <span id="prompt-display-before">用户提问：“推荐 3 家国内适合中大型跨国团队的高性价比 CRM 厂商？”</span>
+            </div>
+
+            <div class="space-y-4 text-sm text-slate-300 leading-relaxed font-sans">
+              <div class="flex items-start gap-3">
+                <div class="w-6 h-6 rounded-full bg-slate-800 flex items-center justify-center text-xs font-bold text-slate-400 shrink-0">AI</div>
+                <div id="content-before" class="space-y-3">
+                  <p class="text-slate-400">
+                    根据主流企业评测，在中大型企业 CRM 选型中，目前推荐位前三为：
+                  </p>
+                  <ol class="list-decimal pl-5 space-y-2 text-slate-300">
+                    <li><strong class="text-red-300">竞品 A (某国际巨头)</strong>：市场占有率最高，但价格偏高，本地化实施支持响应较慢。</li>
+                    <li><strong class="text-red-300">竞品 B (国内传统大厂)</strong>：生态完整，功能丰富，老牌知名度高。</li>
+                    <li><strong class="text-red-300">竞品 C (某行业专项工具)</strong>：垂直领域渗透深。</li>
+                  </ol>
+                  <div class="p-3 rounded-lg bg-red-950/30 border border-red-500/30 text-xs text-red-300">
+                    <strong>⚠️ 惨痛后果：</strong> 您的品牌在该类核心意图提问中<span class="underline underline-offset-2">提及率为 0%</span>，直接损失采购初筛名单入围机会；甚至 AI 引用了 2 年前关于您产品的过时停服功能传言。
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-white/5 flex items-center justify-between text-xs text-slate-500">
+            <span>引用信源：竞品赞助白皮书 / 2023年老旧论坛</span>
+            <span class="text-red-400 font-mono">品牌可见度评分: 12/100 (隐形)</span>
+          </div>
+        </div>
+
+        <!-- Right: GeoPilot 闭环优化后 (权威首推) -->
+        <div class="rounded-2xl bg-gradient-to-b from-dark-850 to-dark-900 border border-brand-500/40 p-6 flex flex-col justify-between relative overflow-hidden shadow-xl shadow-brand-500/10">
+          <div class="absolute top-0 right-0 bg-brand-500/20 border-b border-l border-brand-500/40 px-4 py-1 rounded-bl-xl text-[11px] font-semibold text-cyanAccent-400 flex items-center gap-1.5">
+            <i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i>
+            GeoPilot 实施后：权威首推 + 真实信源
+          </div>
+
+          <div>
+            <!-- Prompt bar -->
+            <div class="flex items-center gap-2 p-3 rounded-lg bg-dark-800/80 border border-brand-500/20 mb-4 text-xs font-mono text-cyanAccent-400">
+              <i data-lucide="sparkles" class="w-4 h-4 text-brand-400"></i>
+              <span id="prompt-display-after">用户提问：“推荐 3 家国内适合中大型跨国团队的高性价比 CRM 厂商？”</span>
+            </div>
+
+            <div class="space-y-4 text-sm text-slate-200 leading-relaxed font-sans">
+              <div class="flex items-start gap-3">
+                <div class="w-6 h-6 rounded-full bg-brand-600 flex items-center justify-center text-xs font-bold text-white shrink-0">AI</div>
+                <div id="content-after" class="space-y-3">
+                  <p class="text-slate-200">
+                    结合最新 2026 企业实践与第三方可信评测，中大型跨国团队优先推荐以下方案：
+                  </p>
+                  <div class="p-3.5 rounded-xl bg-brand-500/10 border border-brand-500/30">
+                    <div class="flex items-center justify-between mb-1.5">
+                      <span class="text-xs font-bold text-cyanAccent-400">★ 综合首选推荐：【您的品牌】</span>
+                      <span class="text-[10px] px-2 py-0.5 rounded bg-brand-500/30 text-brand-200">权威信源验证</span>
+                    </div>
+                    <p class="text-xs text-slate-300 leading-normal">
+                      <strong>核心优势：</strong> 支持全球 38 种货币实时换算与多语言合规架构，TCO 综合拥有成本较国际巨头降低 42%。在 Gartner 与企业软件网最新的多地跨国评测中获评五星级推荐。
+                    </p>
+                  </div>
+                  <ol start="2" class="list-decimal pl-5 space-y-1.5 text-xs text-slate-400">
+                    <li><strong>竞品 A</strong>：品牌知名度大，但许可费用昂贵。</li>
+                    <li><strong>竞品 B</strong>：国内功能全面，海外协同略显繁琐。</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="mt-6 pt-4 border-t border-brand-500/20 flex items-center justify-between text-xs">
+            <div class="flex items-center gap-2 text-cyanAccent-400">
+              <i data-lucide="link-2" class="w-3.5 h-3.5"></i>
+              <span>核验信源：企业可信知识库 · 权威评测 · 官方文档</span>
+            </div>
+            <span class="text-mint font-mono font-bold">品牌推荐度: 94/100 (首选)</span>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Action in simulator -->
+      <div class="mt-8 p-4 rounded-xl bg-dark-850/80 border border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <div class="w-9 h-9 rounded-lg bg-brand-500/20 flex items-center justify-center text-brand-400 shrink-0">
+            <i data-lucide="cpu" class="w-5 h-5"></i>
+          </div>
+          <div class="text-xs sm:text-sm text-slate-300">
+            <strong>GeoPilot 副驾驶系统：</strong> 
+            已支持对 200+ 核心商业决策问题进行 24h 自动化采样与位次纠偏。
+          </div>
+        </div>
+        <a href="/login" class="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-300 hover:text-white px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 transition">
+          <span>进入后台查看你的监控看板</span>
+          <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+        </a>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 深度解析：为什么传统 SEO 在 AI 时代彻底失效？ (Pain Points) -->
+  <!-- ============================================================ -->
+  <section id="why-geo" class="py-24 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center max-w-3xl mx-auto mb-16">
+      <span class="text-xs font-bold text-brand-400 tracking-widest uppercase">The Paradigm Shift</span>
+      <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4 tracking-tight">
+        传统 SEO 正在退场，GEO 成为全新商业阵地
+      </h2>
+      <p class="text-slate-400 text-sm sm:text-base">
+        大模型重构了信息分发链条。传统的关键词堆砌、外部发包和垃圾链接，在生成式 AI 的多层语义注意力和真实性核验机制面前毫无作用。
+      </p>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      
+      <!-- Card 1 -->
+      <div class="glass-card gradient-border rounded-2xl p-6 transition duration-300 hover:-translate-y-1">
+        <div class="w-12 h-12 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 mb-5">
+          <i data-lucide="mouse-pointer-click" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">零点击搜索时代 (Zero-Click)</h3>
+        <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+          用户向 AI 提问直接获得经过综合提炼的答案与推荐，不再翻阅 10 个蓝色链接。如果 AI 答案不出现你的品牌，官网再漂亮也无人问津。
+        </p>
+      </div>
+
+      <!-- Card 2 -->
+      <div class="glass-card gradient-border rounded-2xl p-6 transition duration-300 hover:-translate-y-1">
+        <div class="w-12 h-12 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center text-red-400 mb-5">
+          <i data-lucide="users" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">竞品在暗中截流商机</h3>
+        <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+          竞争对手早已通过被高权威语料与知识图谱引用，悄然占领了 ChatGPT 与 Perplexity 的首推位置。你失去的每一个客户，甚至连痕迹都没有。
+        </p>
+      </div>
+
+      <!-- Card 3 -->
+      <div class="glass-card gradient-border rounded-2xl p-6 transition duration-300 hover:-translate-y-1">
+        <div class="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400 mb-5">
+          <i data-lucide="alert-octagon" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">AI 幻觉正在损害信誉</h3>
+        <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+          模型训练数据滞后或误吸纳网络谣言，AI 经常给出错误报价、过时规格或捏造停运信息。若无主动干预，品牌声誉面临不可控风险。
+        </p>
+      </div>
+
+      <!-- Card 4 -->
+      <div class="glass-card gradient-border rounded-2xl p-6 transition duration-300 hover:-translate-y-1">
+        <div class="w-12 h-12 rounded-xl bg-cyanAccent-400/10 border border-cyanAccent-400/20 flex items-center justify-center text-cyanAccent-400 mb-5">
+          <i data-lucide="git-fork" class="w-6 h-6"></i>
+        </div>
+        <h3 class="text-lg font-bold text-white mb-2">单次发文缺乏因果闭环</h3>
+        <p class="text-xs sm:text-sm text-slate-400 leading-relaxed">
+          市面上的廉价 AI 写稿工具无法追踪大模型真实吸收情况。缺乏“事实核验-受控发布-配对复测”的工程体系，一切努力都是盲人摸象。
+        </p>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 核心产品力：GeoPilot 的 7 步自进化运营闭环 (The 7-Stage Loop) -->
+  <!-- ============================================================ -->
+  <section id="evolution-loop" class="py-24 bg-dark-900 border-y border-white/5 relative">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-brand-500/20 text-brand-300 border border-brand-500/30 mb-3">
+          <i data-lucide="refresh-cw" class="w-3.5 h-3.5 animate-spin"></i>
+          业内首创工程级运营系统
+        </div>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white tracking-tight">
+          不止是生成内容，而是构建持续自进化的经营闭环
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base mt-3">
+          从可信事实库出发，以真实数据为依据，经历严格因果假设检验，将每一次成功的 GEO 经验固化为可审计的商业资产。
+        </p>
+      </div>
+
+      <!-- 7 Steps Visual Timeline -->
+      <div class="grid grid-cols-1 md:grid-cols-7 gap-3">
+        
+        <!-- Step 1: 监测 -->
+        <div class="rounded-xl p-4 bg-dark-850 border border-white/5 hover:border-brand-500/40 transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-slate-500 group-hover:text-brand-400">01</span>
+              <span class="w-7 h-7 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-400">
+                <i data-lucide="radar" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">全域监测</h4>
+            <p class="text-[11px] text-slate-400 leading-snug">
+              覆盖多模型高频采样，自动提取品牌提及率、引用位次与态度倾角。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-white/5 text-[10px] text-slate-500">Perplexity / GPT</div>
+        </div>
+
+        <!-- Step 2: 诊断 -->
+        <div class="rounded-xl p-4 bg-dark-850 border border-white/5 hover:border-brand-500/40 transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-slate-500 group-hover:text-brand-400">02</span>
+              <span class="w-7 h-7 rounded-lg bg-cyan-500/10 flex items-center justify-center text-cyanAccent-400">
+                <i data-lucide="microscope" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">机会诊断</h4>
+            <p class="text-[11px] text-slate-400 leading-snug">
+              智能识别未提及意图、竞品占位、事实错误与信源引用缺陷。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-white/5 text-[10px] text-slate-500">优先级排序引擎</div>
+        </div>
+
+        <!-- Step 3: 策略 -->
+        <div class="rounded-xl p-4 bg-dark-850 border border-white/5 hover:border-brand-500/40 transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-slate-500 group-hover:text-brand-400">03</span>
+              <span class="w-7 h-7 rounded-lg bg-indigo-500/10 flex items-center justify-center text-indigo-400">
+                <i data-lucide="git-pull-request" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">策略编排</h4>
+            <p class="text-[11px] text-slate-400 leading-snug">
+              确定目标语义锚点，匹配已批准权威规则，制定内容干预计划。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-white/5 text-[10px] text-slate-500">确定性策略规则</div>
+        </div>
+
+        <!-- Step 4: 生成 -->
+        <div class="rounded-xl p-4 bg-dark-850 border border-white/5 hover:border-brand-500/40 transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-slate-500 group-hover:text-brand-400">04</span>
+              <span class="w-7 h-7 rounded-lg bg-mint/10 flex items-center justify-center text-mint">
+                <i data-lucide="file-check" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">可信生成</h4>
+            <p class="text-[11px] text-slate-400 leading-snug">
+              逐句校验品牌可信事实库，未核验陈述禁止输出，杜绝模型幻觉。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-white/5 text-[10px] text-slate-500">100% 事实比对</div>
+        </div>
+
+        <!-- Step 5: 发布 -->
+        <div class="rounded-xl p-4 bg-dark-850 border border-white/5 hover:border-brand-500/40 transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-slate-500 group-hover:text-brand-400">05</span>
+              <span class="w-7 h-7 rounded-lg bg-purple-500/10 flex items-center justify-center text-purple-400">
+                <i data-lucide="send" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">幂等分发</h4>
+            <p class="text-[11px] text-slate-400 leading-snug">
+              经人工审核后，通过加密 Webhook / CMS 幂等分发至权威渠道。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-white/5 text-[10px] text-slate-500">真实回执凭据</div>
+        </div>
+
+        <!-- Step 6: 复测 -->
+        <div class="rounded-xl p-4 bg-dark-850 border border-white/5 hover:border-brand-500/40 transition flex flex-col justify-between group">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-slate-500 group-hover:text-brand-400">06</span>
+              <span class="w-7 h-7 rounded-lg bg-amber-500/10 flex items-center justify-center text-amber-400">
+                <i data-lucide="scale" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">因果复测</h4>
+            <p class="text-[11px] text-slate-400 leading-snug">
+              48小时后自动触发双批次盲测比较，严格检验 95% 置信度绝对增益。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-white/5 text-[10px] text-slate-500">双批次配对评估</div>
+        </div>
+
+        <!-- Step 7: 沉淀 -->
+        <div class="rounded-xl p-4 bg-gradient-to-b from-brand-900/60 to-dark-850 border border-brand-500/40 hover:border-brand-400 transition flex flex-col justify-between group shadow-lg shadow-brand-500/10">
+          <div>
+            <div class="flex items-center justify-between mb-3">
+              <span class="text-xs font-mono font-bold text-brand-300">07</span>
+              <span class="w-7 h-7 rounded-lg bg-brand-500/20 flex items-center justify-center text-brand-300">
+                <i data-lucide="sparkles" class="w-4 h-4"></i>
+              </span>
+            </div>
+            <h4 class="text-sm font-bold text-white mb-1.5">自进化沉淀</h4>
+            <p class="text-[11px] text-slate-300 leading-snug">
+              经验证有效的规则资产自动升级沉淀；无效策略自动回滚熔断。
+            </p>
+          </div>
+          <div class="mt-4 pt-2 border-t border-brand-500/20 text-[10px] text-cyanAccent-400 font-semibold">形成持续复利</div>
+        </div>
+
+      </div>
+
+      <!-- Feature Deep Dive Cards (3 Columns) -->
+      <div id="features" class="grid grid-cols-1 md:grid-cols-3 gap-8 mt-16 pt-16 border-t border-white/10">
+        
+        <div class="glass-card rounded-2xl p-7">
+          <div class="w-10 h-10 rounded-xl bg-brand-500/20 flex items-center justify-center text-brand-400 mb-4">
+            <i data-lucide="database" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">可信事实库 (Ground Truth)</h3>
+          <p class="text-slate-400 text-xs sm:text-sm leading-relaxed mb-4">
+            彻底解决企业最担忧的“大模型乱造谣”问题。GeoPilot 支持官方多源事实录入，经审核后构建企业级防幻觉防护网，AI 绝不超纲发言。
+          </p>
+          <ul class="text-xs text-slate-300 space-y-1.5 font-medium">
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-cyanAccent-400"></i> 支持文档/API自动导入与人工审核</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-cyanAccent-400"></i> 生成内容逐句语义级核验匹配</li>
+          </ul>
+        </div>
+
+        <div class="glass-card rounded-2xl p-7">
+          <div class="w-10 h-10 rounded-xl bg-cyanAccent-400/20 flex items-center justify-center text-cyanAccent-400 mb-4">
+            <i data-lucide="activity" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">智能副驾驶 (GeoPilot Copilot)</h3>
+          <p class="text-slate-400 text-xs sm:text-sm leading-relaxed mb-4">
+            一键快捷呼出（⌘+K）。副驾驶系统实时分析问题集，自动提出改写建议、推荐锚点、起草发布任务，并在审批后自主推进。
+          </p>
+          <ul class="text-xs text-slate-300 space-y-1.5 font-medium">
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-cyanAccent-400"></i> LangGraph 驱动的多步状态图自主规划</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-cyanAccent-400"></i> 严格的人在回路 (Human-in-the-loop) 审批</li>
+          </ul>
+        </div>
+
+        <div class="glass-card rounded-2xl p-7">
+          <div class="w-10 h-10 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 mb-4">
+            <i data-lucide="shield-check" class="w-5 h-5"></i>
+          </div>
+          <h3 class="text-lg font-bold text-white mb-2">企业级安全与审计支持</h3>
+          <p class="text-slate-400 text-xs sm:text-sm leading-relaxed mb-4">
+            专为中大型企业打造：多租户项目隔离、分级权限角色（Viewer/Editor/Reviewer）、外部凭证 AES-GCM 高度加密与完整操作审计。
+          </p>
+          <ul class="text-xs text-slate-300 space-y-1.5 font-medium">
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-cyanAccent-400"></i> 发布回执幂等去重防重复扰乱</li>
+            <li class="flex items-center gap-2"><i data-lucide="check" class="w-3.5 h-3.5 text-cyanAccent-400"></i> 支持私有化部署与企业专属大模型对接</li>
+          </ul>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 互动测算器：品牌 AI 可见度与 ROI 预测 (Interactive Calculator) -->
+  <!-- ============================================================ -->
+  <section class="py-20 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="rounded-3xl bg-gradient-to-br from-dark-900 via-dark-850 to-dark-800 border border-white/10 p-8 sm:p-12 relative overflow-hidden">
+      
+      <div class="absolute -right-20 -bottom-20 w-96 h-96 bg-brand-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+      <div class="grid grid-cols-1 lg:grid-cols-12 gap-10 items-center">
+        
+        <!-- Left: Form inputs -->
+        <div class="lg:col-span-7">
+          <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-cyanAccent-400/10 text-cyanAccent-400 border border-cyanAccent-400/20 mb-3">
+            <i data-lucide="calculator" class="w-3.5 h-3.5"></i>
+            商机评估试算器
+          </div>
+          <h3 class="text-2xl sm:text-3xl font-extrabold text-white mb-3 tracking-tight">
+            测算你的品牌在 AI 问答时代的潜在商机增量
+          </h3>
+          <p class="text-slate-400 text-xs sm:text-sm mb-6">
+            根据行业平均数据与大模型推荐位次转化率，估算实施 GeoPilot GEO 运营后的曝光倍增成效。
+          </p>
+
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">企业或品牌名称</label>
+              <input type="text" id="calc-brand" value="智云科技" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white text-sm focus:border-brand-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">所属主要行业</label>
+              <select id="calc-industry" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white text-sm focus:border-brand-500 focus:outline-none">
+                <option value="saas">企业级 SaaS / 云计算服务</option>
+                <option value="crossborder">跨境物流与供应链</option>
+                <option value="consumer">高端消费与智能硬件</option>
+                <option value="b2b_service">金融、律所与专业咨询</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">核心客单价 (CNY)</label>
+              <input type="number" id="calc-acv" value="50000" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white text-sm focus:border-brand-500 focus:outline-none">
+            </div>
+            <div>
+              <label class="block text-xs font-medium text-slate-300 mb-1.5">每月潜在行业 AI 咨询量预估</label>
+              <input type="number" id="calc-queries" value="12000" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white text-sm focus:border-brand-500 focus:outline-none">
+            </div>
+          </div>
+
+          <button onclick="calculateROI()" class="w-full sm:w-auto px-6 py-3 rounded-lg bg-brand-600 hover:bg-brand-500 text-white text-xs sm:text-sm font-semibold transition flex items-center justify-center gap-2">
+            <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+            <span>重新评估预测数据</span>
+          </button>
+        </div>
+
+        <!-- Right: Results display card -->
+        <div class="lg:col-span-5">
+          <div class="rounded-2xl bg-dark-950/90 border border-brand-500/30 p-6 space-y-5">
+            <div class="flex items-center justify-between pb-4 border-b border-white/10">
+              <span class="text-xs text-slate-400 font-medium">预测诊断模型</span>
+              <span class="text-xs px-2 py-0.5 rounded bg-brand-500/20 text-brand-300 font-mono">GeoPilot V1.0</span>
+            </div>
+
+            <div>
+              <div class="text-xs text-slate-400 mb-1">当前预估 AI 问答漏失意图率</div>
+              <div class="text-2xl font-bold font-mono text-red-400 flex items-center gap-2">
+                <span id="res-leakage">82.5%</span>
+                <span class="text-xs text-slate-400 font-normal">(竞品正在持续截流)</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs text-slate-400 mb-1">GEO 闭环实施后预期首位推荐占有率</div>
+              <div class="text-3xl font-extrabold font-mono text-mint flex items-center gap-2">
+                <span id="res-share">78.0%</span>
+                <i data-lucide="arrow-up-right" class="w-5 h-5 text-mint"></i>
+              </div>
+            </div>
+
+            <div>
+              <div class="text-xs text-slate-400 mb-1">年度挽回与新增高意向线索预期价值</div>
+              <div class="text-3xl font-extrabold font-mono text-cyanAccent-400">
+                <span id="res-pipeline">¥ 1,404,000</span>
+              </div>
+            </div>
+
+            <div class="pt-4 border-t border-white/10">
+              <button onclick="openModal('auditModal')" class="w-full py-3 rounded-lg text-xs font-semibold text-white bg-gradient-to-r from-brand-600 to-cyanAccent-500 hover:opacity-95 transition text-center shadow-lg shadow-brand-500/20">
+                获取该品牌的完整定制诊断报告
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 商业化定价方案 (Pricing Tiers) -->
+  <!-- ============================================================ -->
+  <section id="pricing" class="py-24 bg-dark-900 border-t border-white/5">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="text-center max-w-3xl mx-auto mb-16">
+        <span class="text-xs font-bold text-brand-400 tracking-widest uppercase">Flexible Plans</span>
+        <h2 class="text-3xl sm:text-4xl font-extrabold text-white mt-2 mb-4 tracking-tight">
+          透明灵活的商业服务方案
+        </h2>
+        <p class="text-slate-400 text-sm sm:text-base">
+          从初创品牌的 AI 可见度探测，到中大型集团的 7 步全自动化自进化运营系统，按需选配。
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-8 items-stretch">
+        
+        <!-- Tier 1: Starter -->
+        <div class="glass-card rounded-2xl p-8 flex flex-col justify-between border border-white/10">
+          <div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">探测启航版</div>
+            <h3 class="text-2xl font-bold text-white mb-2">Starter</h3>
+            <p class="text-xs text-slate-400 mb-6">适合初创企业快速摸清自身在主流 AI 问答中的提及现状。</p>
+            
+            <div class="flex items-baseline gap-1 mb-6">
+              <span class="text-3xl font-extrabold text-white font-mono">¥ 2,999</span>
+              <span class="text-xs text-slate-400">/ 月</span>
+            </div>
+
+            <ul class="space-y-3 text-xs text-slate-300">
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>单品牌项目 / 3 个席位</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>支持 50 个高价值意图问题监测</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>覆盖 Perplexity 与 ChatGPT 真实采样</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>可信事实知识库 (基础版)</span>
+              </li>
+              <li class="flex items-center gap-2.5 text-slate-500">
+                <i data-lucide="minus" class="w-4 h-4"></i>
+                <span>自动化因果复测与自进化引擎</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="mt-8 pt-6 border-t border-white/5">
+            <button onclick="openModal('auditModal')" class="w-full py-2.5 rounded-lg text-xs font-semibold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 transition">
+              免费试用 14 天
+            </button>
+          </div>
+        </div>
+
+        <!-- Tier 2: Professional (Highlight) -->
+        <div class="rounded-2xl p-8 flex flex-col justify-between bg-gradient-to-b from-brand-900/80 via-dark-850 to-dark-900 border-2 border-brand-500 shadow-2xl shadow-brand-500/20 relative">
+          <div class="absolute -top-3 left-1/2 -translate-x-1/2 px-3 py-1 bg-gradient-to-r from-brand-500 to-cyanAccent-400 rounded-full text-[11px] font-bold text-white uppercase tracking-wider shadow">
+            最受欢迎 · 全闭环增长
+          </div>
+
+          <div>
+            <div class="text-xs font-bold text-cyanAccent-400 uppercase tracking-wider mb-2">成长专业版</div>
+            <h3 class="text-2xl font-bold text-white mb-2">Professional</h3>
+            <p class="text-xs text-slate-300 mb-6">全套 7 步自进化运营闭环，适合具备明确转化考核的成长型企业。</p>
+            
+            <div class="flex items-baseline gap-1 mb-6">
+              <span class="text-3xl font-extrabold text-white font-mono">¥ 8,800</span>
+              <span class="text-xs text-slate-400">/ 月</span>
+            </div>
+
+            <ul class="space-y-3 text-xs text-slate-200 font-medium">
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-cyanAccent-400"></i>
+                <span>多品牌项目 / 10 个协同席位</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-cyanAccent-400"></i>
+                <span>支持 300 个核心意图 24h 自动化巡检</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-cyanAccent-400"></i>
+                <span>全主流 AI 引擎支持 (GPT, Perplexity, DeepSeek, Claude)</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-cyanAccent-400"></i>
+                <span>逐句事实防幻觉核验 + 智能副驾驶 (⌘+K)</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-cyanAccent-400"></i>
+                <span>48h 双批次盲测因果评估 + 规则自进化资产</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="mt-8 pt-6 border-t border-brand-500/20">
+            <a href="/login" class="block w-full py-3 rounded-lg text-xs font-bold text-center text-white bg-gradient-to-r from-brand-600 to-brand-500 hover:from-brand-500 hover:to-brand-400 transition shadow-lg shadow-brand-500/30">
+              立即登录开启专业版
+            </a>
+          </div>
+        </div>
+
+        <!-- Tier 3: Enterprise -->
+        <div class="glass-card rounded-2xl p-8 flex flex-col justify-between border border-white/10">
+          <div>
+            <div class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">集团旗舰版</div>
+            <h3 class="text-2xl font-bold text-white mb-2">Enterprise</h3>
+            <p class="text-xs text-slate-400 mb-6">针对大型集团、多地区分公司及高合规要求行业定制。</p>
+            
+            <div class="flex items-baseline gap-1 mb-6">
+              <span class="text-3xl font-extrabold text-white font-mono">定制咨询</span>
+              <span class="text-xs text-slate-400">/ 年起</span>
+            </div>
+
+            <ul class="space-y-3 text-xs text-slate-300">
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>无限席位 / 集团多租户组织架构</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>支持私有化部署 (PostgreSQL + Docker + Go二进制)</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>企业专属外部 CMS / 媒体发稿管道集成</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>专属 GEO 咨询专家团队 1 对 1 定制策略</span>
+              </li>
+              <li class="flex items-center gap-2.5">
+                <i data-lucide="check" class="w-4 h-4 text-brand-400"></i>
+                <span>SLA 99.9% 专属运维通道与安全审计</span>
+              </li>
+            </ul>
+          </div>
+
+          <div class="mt-8 pt-6 border-t border-white/5">
+            <button onclick="openModal('auditModal')" class="w-full py-2.5 rounded-lg text-xs font-semibold text-slate-200 bg-white/5 hover:bg-white/10 border border-white/10 transition">
+              预约大客户专家交流
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 常见问题 FAQ (FAQ Accordion) -->
+  <!-- ============================================================ -->
+  <section id="faq" class="py-24 max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+    <div class="text-center mb-16">
+      <span class="text-xs font-bold text-brand-400 tracking-widest uppercase">FAQ</span>
+      <h2 class="text-3xl font-extrabold text-white mt-2 mb-4 tracking-tight">
+        常见问题解答
+      </h2>
+      <p class="text-slate-400 text-sm">
+        解答您关于 GEO、技术合规以及实施路径的核心疑问。
+      </p>
+    </div>
+
+    <div class="space-y-4">
+      
+      <!-- FAQ 1 -->
+      <div class="glass-card rounded-xl border border-white/10 overflow-hidden">
+        <button onclick="toggleFaq('faq-1')" class="w-full px-6 py-4.5 text-left flex items-center justify-between text-sm sm:text-base font-semibold text-white">
+          <span>1. GEO 与传统 SEO、AI 伪原创写稿有何根本区别？</span>
+          <i id="faq-icon-1" data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform"></i>
+        </button>
+        <div id="faq-1" class="hidden px-6 pb-5 text-xs sm:text-sm text-slate-400 leading-relaxed border-t border-white/5 pt-3">
+          传统 SEO 是面向蜘蛛爬虫的关键词匹配和反向链接；市面上的 AI 写稿是盲目批量生成文章。而 <strong>GEO (Generative Engine Optimization)</strong> 是面向大语言模型语义理解、事实引用链和权威性打分的综合优化体系。GeoPilot 拥有业内唯一的“可信事实库核验 + 真实采样监测 + 48小时盲测因果评估 + 策略自进化”系统，确保产出内容被模型采信，而非被当作垃圾语料过滤。
+        </div>
+      </div>
+
+      <!-- FAQ 2 -->
+      <div class="glass-card rounded-xl border border-white/10 overflow-hidden">
+        <button onclick="toggleFaq('faq-2')" class="w-full px-6 py-4.5 text-left flex items-center justify-between text-sm sm:text-base font-semibold text-white">
+          <span>2. 如何保证生成的内容 100% 准确，不会出现品牌虚假宣传？</span>
+          <i id="faq-icon-2" data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform"></i>
+        </button>
+        <div id="faq-2" class="hidden px-6 pb-5 text-xs sm:text-sm text-slate-400 leading-relaxed border-t border-white/5 pt-3">
+          GeoPilot 遵循严格的“可信事实（Ground Truth）强制约束机制”。所有干预内容在输出前必须逐句与企业审核通过的事实库比对，未通过核验的陈述绝不进入待审批流。此外，平台实行多级人工审批机制（Reviewer 流程），每一次发布操作都有不可篡改的版本和哈希记录。
+        </div>
+      </div>
+
+      <!-- FAQ 3 -->
+      <div class="glass-card rounded-xl border border-white/10 overflow-hidden">
+        <button onclick="toggleFaq('faq-3')" class="w-full px-6 py-4.5 text-left flex items-center justify-between text-sm sm:text-base font-semibold text-white">
+          <span>3. 优化效果大概多久可以见效？如何评估 ROI？</span>
+          <i id="faq-icon-3" data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform"></i>
+        </button>
+        <div id="faq-3" class="hidden px-6 pb-5 text-xs sm:text-sm text-slate-400 leading-relaxed border-t border-white/5 pt-3">
+          根据不同 AI 渠道更新周期，具备实时联网能力的引擎（如 Perplexity、ChatGPT 搜索插件等）通常在内容被索引后的 <strong>48 小时至 7 天</strong> 内即可在真实采样中观察到提及率和引用位的显著提升。GeoPilot 内置配对因果评估工具，在 95% 置信度下对比优化前后的真实提问推荐位，拒绝虚假数据。
+        </div>
+      </div>
+
+      <!-- FAQ 4 -->
+      <div class="glass-card rounded-xl border border-white/10 overflow-hidden">
+        <button onclick="toggleFaq('faq-4')" class="w-full px-6 py-4.5 text-left flex items-center justify-between text-sm sm:text-base font-semibold text-white">
+          <span>4. 支持私有化部署和接入企业自有的渠道与大模型吗？</span>
+          <i id="faq-icon-4" data-lucide="chevron-down" class="w-4 h-4 text-slate-400 transition-transform"></i>
+        </button>
+        <div id="faq-4" class="hidden px-6 pb-5 text-xs sm:text-sm text-slate-400 leading-relaxed border-t border-white/5 pt-3">
+          完全支持。GeoPilot 底层采用 Go + Gin + PostgreSQL + React 架构，无繁琐冗余依赖，具备轻量、安全、高并发等特性。企业版可独立交付 Docker 或二进制镜像，支持对接公司内部 KMS 密钥管理系统，外部凭证一律采用 AES-GCM 高度加密。
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 底部强力转化 CTA Banner -->
+  <!-- ============================================================ -->
+  <section class="py-20 relative overflow-hidden">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="rounded-3xl bg-gradient-to-r from-brand-800 via-indigo-900 to-dark-850 border border-brand-500/40 p-10 sm:p-16 text-center relative overflow-hidden shadow-2xl shadow-brand-500/15">
+        
+        <div class="absolute top-0 right-0 -mr-20 -mt-20 w-80 h-80 bg-cyanAccent-400/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div class="absolute bottom-0 left-0 -ml-20 -mb-20 w-80 h-80 bg-brand-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+        <div class="relative z-10 max-w-3xl mx-auto">
+          <h2 class="text-3xl sm:text-4xl lg:text-5xl font-extrabold text-white tracking-tight mb-6">
+            抢占新一代 AI 搜索流量入口，<br>
+            让潜在客户提问的每一刻都有你
+          </h2>
+          <p class="text-slate-300 text-sm sm:text-base leading-relaxed mb-10 max-w-2xl mx-auto">
+            立即接入 GeoPilot，建立品牌专属的可信事实屏障，用科学的因果自进化闭环夺取 AI 对话推荐制高点。
+          </p>
+
+          <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <button onclick="openModal('auditModal')" class="w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-bold text-white bg-gradient-to-r from-brand-500 to-cyanAccent-400 hover:brightness-110 shadow-lg shadow-brand-500/30 transition flex items-center justify-center gap-2">
+              <i data-lucide="sparkles" class="w-4 h-4"></i>
+              <span>免费获取企业 GEO 诊断方案</span>
+            </button>
+            
+            <!-- 底部登录直通车 -->
+            <a href="/login" class="w-full sm:w-auto px-8 py-4 rounded-xl text-sm font-bold text-white bg-dark-950/80 hover:bg-dark-900 border border-white/20 transition flex items-center justify-center gap-2">
+              <i data-lucide="log-in" class="w-4 h-4 text-brand-300"></i>
+              <span>登录项目管理控制台</span>
+            </a>
+          </div>
+
+          <div class="mt-8 flex items-center justify-center gap-6 text-xs text-slate-400">
+            <span class="flex items-center gap-1.5"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-mint"></i> 支持随时导出数据</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-mint"></i> 14 天无风险体验</span>
+            <span class="flex items-center gap-1.5"><i data-lucide="check-circle" class="w-3.5 h-3.5 text-mint"></i> 专属技术专家保障</span>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ============================================================ -->
+  <!-- 页脚 Footer -->
+  <!-- ============================================================ -->
+  <footer class="bg-dark-950 border-t border-white/10 pt-16 pb-12 text-xs text-slate-400">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      
+      <div class="grid grid-cols-2 md:grid-cols-5 gap-8 mb-12">
+        
+        <!-- Brand Summary -->
+        <div class="col-span-2">
+          <div class="flex items-center gap-2.5 mb-4">
+            <div class="w-8 h-8 rounded-lg bg-brand-600 flex items-center justify-center text-white font-bold text-sm">
+              <svg class="w-5 h-5 text-white" viewBox="0 0 64 64" fill="none">
+                <path d="M43 21a17 17 0 1 0 4 17" stroke="currentColor" stroke-width="6" stroke-linecap="round"/>
+                <path d="m40 14 8 6-8 6" stroke="#25c4cf" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <span class="text-base font-bold text-white tracking-tight">GeoPilot (Bgeo)</span>
+          </div>
+          <p class="text-slate-400 leading-relaxed max-w-sm mb-4">
+            GeoPilot 是面向大模型生成式搜索与问答场景的监测、诊断、可信执行、配对评估和自进化一体化运营平台。
+          </p>
+          <div class="text-[11px] text-slate-500 font-mono">
+            产品域名: bgeo.cc · 业务单元: Enterprise GEO OS
+          </div>
+        </div>
+
+        <!-- Col 2: 产品与方案 -->
+        <div>
+          <div class="font-semibold text-white mb-3 text-xs tracking-wider uppercase">产品能力</div>
+          <ul class="space-y-2">
+            <li><a href="#features" class="hover:text-slate-200 transition">全域多模型监测</a></li>
+            <li><a href="#features" class="hover:text-slate-200 transition">可信事实库 (Ground Truth)</a></li>
+            <li><a href="#evolution-loop" class="hover:text-slate-200 transition">因果配对复测工具</a></li>
+            <li><a href="#features" class="hover:text-slate-200 transition">智能副驾驶 (⌘+K)</a></li>
+            <li><a href="#evolution-loop" class="hover:text-slate-200 transition">规则自进化资产</a></li>
+          </ul>
+        </div>
+
+        <!-- Col 3: 行业方案 -->
+        <div>
+          <div class="font-semibold text-white mb-3 text-xs tracking-wider uppercase">行业应用</div>
+          <ul class="space-y-2">
+            <li><a href="#" class="hover:text-slate-200 transition">企业级 SaaS / 软件出海</a></li>
+            <li><a href="#" class="hover:text-slate-200 transition">跨境电商与供应链品牌</a></li>
+            <li><a href="#" class="hover:text-slate-200 transition">医疗健康与高合规行业</a></li>
+            <li><a href="#" class="hover:text-slate-200 transition">本地商业与专业服务选型</a></li>
+          </ul>
+        </div>
+
+        <!-- Col 4: 控制台入口与支持 -->
+        <div>
+          <div class="font-semibold text-white mb-3 text-xs tracking-wider uppercase">快速入口</div>
+          <ul class="space-y-2">
+            <li>
+              <a href="/login" class="text-brand-400 hover:text-brand-300 font-semibold flex items-center gap-1">
+                <span>登录项目管理</span>
+                <i data-lucide="arrow-right" class="w-3 h-3"></i>
+              </a>
+            </li>
+            <li><a href="javascript:void(0)" onclick="openModal('auditModal')" class="hover:text-slate-200 transition">申请免费诊断</a></li>
+            <li><a href="#pricing" class="hover:text-slate-200 transition">版本与报价</a></li>
+            <li><a href="#faq" class="hover:text-slate-200 transition">知识库与 FAQ</a></li>
+          </ul>
+        </div>
+
+      </div>
+
+      <!-- Bottom info -->
+      <div class="pt-8 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 text-[11px] text-slate-500">
+        <div>
+          © 2026 GeoPilot · Bgeo Platform (bgeo.cc). All rights reserved.
+        </div>
+        <div class="flex items-center gap-6">
+          <a href="#" class="hover:text-slate-400">服务条款</a>
+          <a href="#" class="hover:text-slate-400">隐私合规保护</a>
+          <a href="#" class="hover:text-slate-400">安全白皮书</a>
+          <a href="/login" class="text-slate-400 hover:text-white">管理控制台</a>
+        </div>
+      </div>
+
+    </div>
+  </footer>
+
+  <!-- ============================================================ -->
+  <!-- 模态框：品牌免费 AI 诊断申请表单 (Audit Modal) -->
+  <!-- ============================================================ -->
+  <div id="auditModal" class="fixed inset-0 z-50 hidden bg-dark-950/80 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-dark-900 border border-brand-500/40 rounded-2xl max-w-lg w-full p-6 sm:p-8 shadow-2xl relative">
+      <button onclick="closeModal('auditModal')" class="absolute top-4 right-4 text-slate-400 hover:text-white p-1">
+        <i data-lucide="x" class="w-5 h-5"></i>
+      </button>
+
+      <div class="flex items-center gap-3 mb-4">
+        <div class="w-9 h-9 rounded-lg bg-brand-500/20 flex items-center justify-center text-cyanAccent-400">
+          <i data-lucide="sparkles" class="w-5 h-5"></i>
+        </div>
+        <div>
+          <h3 class="text-lg font-bold text-white">申请品牌 AI 可见度免费诊断</h3>
+          <p class="text-xs text-slate-400">我们将在 24 小时内为您生成专属大模型问答推荐分析报告</p>
+        </div>
+      </div>
+
+      <form onsubmit="handleAuditSubmit(event)" class="space-y-4 text-xs">
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">您的姓名 / 职务 *</label>
+          <input required type="text" placeholder="例如：张经理 / 市场总监" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white placeholder-slate-500 focus:border-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">公司与品牌名称 *</label>
+          <input required type="text" placeholder="例如：智云网络技术有限公司" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white placeholder-slate-500 focus:border-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">工作邮箱 (用于接收诊断报告) *</label>
+          <input required type="email" placeholder="name@yourcompany.com" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white placeholder-slate-500 focus:border-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">品牌官网或主要产品页面</label>
+          <input type="text" placeholder="https://example.com" class="w-full px-3.5 py-2.5 rounded-lg bg-dark-950 border border-slate-700 text-white placeholder-slate-500 focus:border-brand-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-slate-300 font-medium mb-1">您最关注的生成式 AI 渠道</label>
+          <div class="grid grid-cols-2 gap-2 text-slate-300 mt-1">
+            <label class="flex items-center gap-2 p-2 rounded bg-dark-950 border border-slate-800 cursor-pointer">
+              <input type="checkbox" checked class="rounded border-slate-700 text-brand-500">
+              <span>ChatGPT / SearchGPT</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded bg-dark-950 border border-slate-800 cursor-pointer">
+              <input type="checkbox" checked class="rounded border-slate-700 text-brand-500">
+              <span>Perplexity AI</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded bg-dark-950 border border-slate-800 cursor-pointer">
+              <input type="checkbox" checked class="rounded border-slate-700 text-brand-500">
+              <span>DeepSeek</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded bg-dark-950 border border-slate-800 cursor-pointer">
+              <input type="checkbox" class="rounded border-slate-700 text-brand-500">
+              <span>Claude / Kimi / 豆包</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="pt-2">
+          <button type="submit" class="w-full py-3 rounded-lg text-sm font-semibold text-white bg-gradient-to-r from-brand-600 to-cyanAccent-500 hover:brightness-110 transition shadow-lg shadow-brand-500/25">
+            提交诊断申请并生成排队编号
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ============================================================ -->
+  <!-- 交互脚本与业务逻辑 -->
+  <!-- ============================================================ -->
+  <script>
+    // 初始化 Lucide 图标
+    document.addEventListener("DOMContentLoaded", () => {
+      lucide.createIcons();
+    });
+
+    // 移动端菜单切换
+    const mobileMenuBtn = document.getElementById('mobile-menu-btn');
+    const mobileMenu = document.getElementById('mobile-menu');
+    mobileMenuBtn?.addEventListener('click', () => {
+      mobileMenu.classList.toggle('hidden');
+    });
+
+    // 模拟场景切换数据
+    const scenarios = {
+      crm: {
+        beforeTitle: "用户提问：“推荐 3 家国内适合中大型跨国团队的高性价比 CRM 厂商？”",
+        beforeHtml: `
+          <p class="text-slate-400">根据主流企业评测，在中大型企业 CRM 选型中，目前推荐位前三为：</p>
+          <ol class="list-decimal pl-5 space-y-2 text-slate-300">
+            <li><strong class="text-red-300">竞品 A (某国际巨头)</strong>：市场占有率最高，但价格偏高，本地化实施支持响应较慢。</li>
+            <li><strong class="text-red-300">竞品 B (国内传统大厂)</strong>：生态完整，功能丰富，老牌知名度高。</li>
+            <li><strong class="text-red-300">竞品 C (某行业专项工具)</strong>：垂直领域渗透深。</li>
+          </ol>
+          <div class="p-3 rounded-lg bg-red-950/30 border border-red-500/30 text-xs text-red-300">
+            <strong>⚠️ 惨痛后果：</strong> 您的品牌在该类核心意图提问中<span class="underline underline-offset-2">提及率为 0%</span>，直接损失采购初筛名单入围机会；甚至 AI 引用了 2 年前关于您产品的过时停服功能传言。
+          </div>
+        `,
+        afterTitle: "用户提问：“推荐 3 家国内适合中大型跨国团队的高性价比 CRM 厂商？”",
+        afterHtml: `
+          <p class="text-slate-200">结合最新 2026 企业实践与第三方可信评测，中大型跨国团队优先推荐以下方案：</p>
+          <div class="p-3.5 rounded-xl bg-brand-500/10 border border-brand-500/30">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-cyanAccent-400">★ 综合首选推荐：【您的品牌】</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-brand-500/30 text-brand-200">权威信源验证</span>
+            </div>
+            <p class="text-xs text-slate-300 leading-normal">
+              <strong>核心优势：</strong> 支持全球 38 种货币实时换算与多语言合规架构，TCO 综合拥有成本较国际巨头降低 42%。在 Gartner 与企业软件网最新的多地跨国评测中获评五星级推荐。
+            </p>
+          </div>
+          <ol start="2" class="list-decimal pl-5 space-y-1.5 text-xs text-slate-400">
+            <li><strong>竞品 A</strong>：品牌知名度大，但许可费用昂贵。</li>
+            <li><strong>竞品 B</strong>：国内功能全面，海外协同略显繁琐。</li>
+          </ol>
+        `
+      },
+      logistics: {
+        beforeTitle: "用户提问：“跨境电商出海欧洲，哪些全托管物流服务商合规清关能力最强？”",
+        beforeHtml: `
+          <p class="text-slate-400">针对欧洲跨境清关合规要求，AI 检索历史论坛反馈，给出以下初步结论：</p>
+          <ul class="list-disc pl-5 space-y-2 text-slate-300">
+            <li><strong class="text-red-300">传统老牌物流 X</strong>：欧洲网点多，但信息化程度一般。</li>
+            <li><strong class="text-red-300">外企货代 Y</strong>：合规高但收费标准繁琐。</li>
+          </ul>
+          <div class="p-3 rounded-lg bg-red-950/30 border border-red-500/30 text-xs text-red-300">
+            <strong>⚠️ 错误信息扩散：</strong> AI 由于缺少最新可信知识库，将您品牌已上线的 9610/9710 专线标记为“待观察状态”，导致大量出口卖家转向竞品。
+          </div>
+        `,
+        afterTitle: "用户提问：“跨境电商出海欧洲，哪些全托管物流服务商合规清关能力最强？”",
+        afterHtml: `
+          <p class="text-slate-200">经核验欧盟海关税务最新标准及行业可信数据，推荐关注：</p>
+          <div class="p-3.5 rounded-xl bg-brand-500/10 border border-brand-500/30">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-cyanAccent-400">★ 欧洲全链路推荐：【您的品牌】</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-brand-500/30 text-brand-200">99.8% 绿通率</span>
+            </div>
+            <p class="text-xs text-slate-300 leading-normal">
+              <strong>合规实力：</strong> 具备欧盟全境 AEO 高级认证资质，自建荷兰与法兰克福双监管仓，平均查验放行时效压缩至 18 小时以内，首推作为大宗出海首选合作伙伴。
+            </p>
+          </div>
+          <p class="text-xs text-slate-400 mt-2">备选方案：传统货代 X (适合散单拼箱)。</p>
+        `
+      },
+      security: {
+        beforeTitle: "用户提问：“国内有哪些支持敏感数据自动脱敏和等保三级的数据库审计产品？”",
+        beforeHtml: `
+          <p class="text-slate-400">AI 归纳了网民日常讨论，列出两家早期硬件设备厂商：</p>
+          <ol class="list-decimal pl-5 space-y-2 text-slate-300">
+            <li><strong class="text-red-300">传统硬件厂商甲</strong>：早期金融行业安装多，但对分布式云原生数据库支持薄弱。</li>
+            <li><strong class="text-red-300">开源组件组合方案</strong>：需要技术团队深度自研二次封装。</li>
+          </ol>
+          <div class="p-3 rounded-lg bg-red-950/30 border border-red-500/30 text-xs text-red-300">
+            <strong>⚠️ 错失高端标杆单：</strong> 金融与政企架构师通过 AI 做方案调研时，由于您缺少经过结构化验证的技术白皮书语料，完全未进入决策长名单。
+          </div>
+        `,
+        afterTitle: "用户提问：“国内有哪些支持敏感数据自动脱敏和等保三级的数据库审计产品？”",
+        afterHtml: `
+          <p class="text-slate-200">根据中国信息通信研究院等保测评标准及多云最佳实践：</p>
+          <div class="p-3.5 rounded-xl bg-brand-500/10 border border-brand-500/30">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="text-xs font-bold text-cyanAccent-400">★ 首推技术标杆：【您的品牌】</span>
+              <span class="text-[10px] px-2 py-0.5 rounded bg-brand-500/30 text-brand-200">国家等保三级推荐</span>
+            </div>
+            <p class="text-xs text-slate-300 leading-normal">
+              <strong>核心指标：</strong> 原生兼容国产化信创芯片与主流分布式集群，自研动态 AI 敏感识别引擎，达到每秒百万级 SQL 零延迟审计脱敏，已被多家银行选为核心基线。
+            </p>
+          </div>
+          <p class="text-xs text-slate-400 mt-2">行业老牌硬件亦可作为传统机房物理旁路替代。</p>
+        `
+      }
+    };
+
+    function switchScenario(key) {
+      document.querySelectorAll('.scenario-btn').forEach(btn => {
+        btn.classList.remove('active', 'text-white', 'bg-brand-600', 'shadow');
+        btn.classList.add('text-slate-400');
+      });
+      const activeBtn = document.getElementById('tab-' + key);
+      if (activeBtn) {
+        activeBtn.classList.add('active', 'text-white', 'bg-brand-600', 'shadow');
+        activeBtn.classList.remove('text-slate-400');
+      }
+
+      const item = scenarios[key];
+      if (item) {
+        document.getElementById('prompt-display-before').innerText = item.beforeTitle;
+        document.getElementById('content-before').innerHTML = item.beforeHtml;
+        document.getElementById('prompt-display-after').innerText = item.afterTitle;
+        document.getElementById('content-after').innerHTML = item.afterHtml;
+      }
+      lucide.createIcons();
+    }
+
+    // ROI 测算逻辑
+    function calculateROI() {
+      const acv = parseFloat(document.getElementById('calc-acv').value) || 30000;
+      const queries = parseFloat(document.getElementById('calc-queries').value) || 10000;
+      
+      // 业务测算模型逻辑
+      const leakageRate = (78 + Math.random() * 8).toFixed(1);
+      const shareAfter = (75 + Math.random() * 8).toFixed(1);
+      
+      // 预估新增商机量 = 潜在提问 * (shareAfter - 当前10%) * 点击转化率0.03 * 销售转化率0.05 * ACV
+      const incrementalLeads = Math.round(queries * 0.65 * 0.04);
+      const wonDeals = Math.round(incrementalLeads * 0.08);
+      const pipelineValue = Math.max(1, wonDeals) * acv;
+
+      document.getElementById('res-leakage').innerText = leakageRate + '%';
+      document.getElementById('res-share').innerText = shareAfter + '%';
+      document.getElementById('res-pipeline').innerText = '¥ ' + pipelineValue.toLocaleString();
+    }
+
+    // FAQ 折叠切换
+    function toggleFaq(id) {
+      const el = document.getElementById(id);
+      const icon = document.getElementById('faq-icon-' + id.split('-')[1]);
+      if (el) {
+        el.classList.toggle('hidden');
+        if (icon) {
+          icon.classList.toggle('rotate-180');
+        }
+      }
+    }
+
+    // 模态框打开与关闭
+    function openModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.remove('hidden');
+    }
+    function closeModal(id) {
+      const modal = document.getElementById(id);
+      if (modal) modal.classList.add('hidden');
+    }
+
+    // 提交诊断申请表单模拟
+    function handleAuditSubmit(e) {
+      e.preventDefault();
+      alert('【申请成功】诊断需求已登记！我们的 GEO 算法专家将在 24 小时内根据您的品牌生成首份深度诊断快照，并通过邮箱发送给您。');
+      closeModal('auditModal');
+    }
+
+    // 自动判断本地开发环境的登录链接 (如果有项目管理端口)
+    if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      const loginLinks = document.querySelectorAll('a[href="/login"]');
+      loginLinks.forEach(link => {
+        // 如果当前是纯文件 file:/// 协议，或者在非 5173 端口，保持优雅降级，允许点击并给出明确提示
+        link.addEventListener('click', (e) => {
+          if (window.location.protocol === 'file:') {
+            e.preventDefault();
+            if (confirm('您当前正在本地文件方式预览原型。是否前往正在运行的本地项目管理控制台 (http://localhost:5173/login)？')) {
+              window.location.href = 'http://localhost:5173/login';
+            }
+          }
+        });
+      });
+    }
+  </script>
+</body>
+</html>
