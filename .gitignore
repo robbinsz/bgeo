@@ -30,3 +30,7 @@ __pycache__/
 Homestead.json
 Homestead.yaml
 Thumbs.db
+/bin
+/data
+/web/node_modules
+/web/dist

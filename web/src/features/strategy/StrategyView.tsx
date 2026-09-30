@@ -1,0 +1,3 @@
+import {api} from '../../services/api';import {Page,ResourceState,useResource} from '../../components/ui/Resource';
+interface Props{onShowToast:(title:string,note?:string)=>void;onOpenModal:(title:string)=>void}
+export function StrategyView({onOpenModal}:Props){const resource=useResource(api.getStrategies);return <Page title="策略管理" description="策略记录业务目标和负责人，创建策略后需进一步生成、审核内容。" actions={<button className="btn primary" onClick={()=>onOpenModal('创建策略')}>新建策略</button>}><ResourceState resource={resource} empty={!resource.data?.items.length}/><div className="asset-grid">{resource.data?.items.map(s=><article className="card panel" key={s.id}><h2>{s.title}</h2><p>{s.objective||'尚未填写目标'}</p><p>{s.status} · {s.assignee||'未指派'}</p></article>)}</div></Page>}
