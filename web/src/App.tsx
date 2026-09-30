@@ -22,6 +22,7 @@ const EvolutionView = lazy(() => import('./features/evolution/EvolutionView').th
 const SourcesView = lazy(() => import('./features/sources/SourcesView').then(module => ({default:module.SourcesView})));
 const SettingsView = lazy(() => import('./features/settings/SettingsView').then(module => ({default:module.SettingsView})));
 import { LoginView } from './features/auth/LoginView';
+import { LandingView } from './features/landing/LandingView';
 import { UserProfileModal } from './features/auth/UserProfileModal';
 
 import { api, getProjectID, setProjectID, type Project } from './services/api';
@@ -61,7 +62,30 @@ export function App() {
   const rawPath = location.pathname.replace(/^\//, '') || 'overview';
   const resolvedPath = rawPath === 'copilot/harness' ? 'harness' : rawPath;
   const currentView: ViewType = (VALID_VIEWS.has(resolvedPath) ? resolvedPath : 'overview') as ViewType;
-  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('bgeo_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+  const handleToggleSidebar = () => {
+    if (typeof window !== 'undefined' && window.innerWidth <= 860) {
+      setMobileMenuOpen((prev) => !prev);
+    } else {
+      setSidebarCollapsed((prev) => {
+        const next = !prev;
+        try {
+          localStorage.setItem('bgeo_sidebar_collapsed', String(next));
+        } catch {
+          // ignore
+        }
+        return next;
+      });
+    }
+  };
   const [isCopilotDrawerOpen, setIsCopilotDrawerOpen] = useState(false);
   const [toasts, setToasts] = useState<ToastItem[]>([]);
   const [modal, setModal] = useState<ModalConfig>({ isOpen: false, title: '创建 GEO 任务' });
@@ -119,7 +143,7 @@ export function App() {
 
   const handleNavigate = (view: ViewType) => {
     navigate(`/${view}`);
-    setSidebarOpen(false);
+    setMobileMenuOpen(false);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
@@ -191,6 +215,26 @@ export function App() {
     navigate('/login');
   };
 
+  const isLandingPath =
+    location.pathname === '/' ||
+    location.pathname === '/index.html' ||
+    location.pathname === '/landing';
+
+  if (isLandingPath) {
+    return (
+      <>
+        <SEO title="GeoPilot · AI 搜索可见度与 GEO 运营闭环平台 (bgeo.cc)" />
+        <LandingView
+          isAuthenticated={isAuthenticated}
+          onNavigateLogin={() => navigate('/login')}
+          onNavigateConsole={() => navigate('/overview')}
+          onShowToast={addToast}
+        />
+        <ToastContainer toasts={toasts} onRemove={removeToast} />
+      </>
+    );
+  }
+
   if (!isAuthenticated) {
     if (location.pathname !== '/login') {
       return (
@@ -204,6 +248,7 @@ export function App() {
       <>
         <SEO title="账号登录 · Bgeo (bgeo.cc)" />
         <LoginView
+          onNavigateHome={() => navigate('/')}
           onLoginSuccess={(user) => {
             handleLoginSuccess(user);
             const from = (location.state as any)?.from?.pathname || '/overview';
@@ -216,28 +261,41 @@ export function App() {
     );
   }
 
+  if (location.pathname === '/login') {
+    return <Navigate to="/overview" replace />;
+  }
+
   return (
-    <div className="app">
+    <div className={`app ${sidebarCollapsed ? 'sidebar-collapsed' : ''}`}>
       <Sidebar
         currentView={currentView}
         onNavigate={handleNavigate}
-        isOpen={sidebarOpen}
-        onClose={() => setSidebarOpen(false)}
+        isOpen={mobileMenuOpen}
+        isCollapsed={sidebarCollapsed}
+        onClose={() => setMobileMenuOpen(false)}
         currentUser={currentUser}
         onLogout={handleLogout}
         onOpenProfile={() => setIsProfileOpen(true)}
       />
 
       <div
-        className={`mobile-mask ${sidebarOpen ? 'open' : ''}`}
+        className={`mobile-mask ${mobileMenuOpen ? 'open' : ''}`}
         id="mobileMask"
-        onClick={() => setSidebarOpen(false)}
+        onClick={() => setMobileMenuOpen(false)}
       ></div>
 
       <main className={`main ${currentView === 'copilot' ? 'main-copilot' : ''}`}>
         <TopBar
           projectName={projects.find(project => project.id === getProjectID())?.name}
-          onToggleMenu={() => setSidebarOpen(!sidebarOpen)}
+          projects={projects}
+          currentProjectId={getProjectID()}
+          onSelectProject={(id) => {
+            setProjectID(id);
+            setProjectVersion(v => v + 1);
+          }}
+          mode={mode}
+          isSidebarCollapsed={sidebarCollapsed}
+          onToggleMenu={handleToggleSidebar}
           onShowToast={addToast}
           currentUser={currentUser}
           onLogout={handleLogout}
@@ -252,7 +310,6 @@ export function App() {
         />
 
         <SEO />
-        <div className="toolbar"><label>当前项目<select className="select" value={getProjectID()} onChange={e=>{setProjectID(e.target.value);setProjectVersion(v=>v+1)}}>{projects.map(p=><option key={p.id} value={p.id}>{p.name}</option>)}</select></label>{mode==='demo'&&<strong role="status">演示模式：样本不计入真实效果指标</strong>}</div>
         <div className={`content ${currentView === 'copilot' ? 'content-copilot' : ''}`}>
           {!projectReady?<div role="status">{projectError||'正在核验项目权限…'}{projectError&&<button className="btn" onClick={()=>setProjectVersion(v=>v+1)}>重试</button>}</div>:<Suspense fallback={<p role="status">正在加载页面…</p>}><Routes key={`${getProjectID()}:${projectVersion}`}>
             <Route path="/" element={<Navigate to="/overview" replace />} />

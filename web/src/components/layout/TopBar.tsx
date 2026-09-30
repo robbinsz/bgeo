@@ -12,6 +12,11 @@ interface TopBarProps {
   onOpenProfile?: () => void;
   onOpenCopilot?: () => void;
   projectName?: string;
+  projects?: { id: string; name: string }[];
+  currentProjectId?: string;
+  onSelectProject?: (id: string) => void;
+  mode?: string;
+  isSidebarCollapsed?: boolean;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
@@ -23,13 +28,19 @@ export const TopBar: React.FC<TopBarProps> = ({
   onOpenProfile,
   onOpenCopilot,
   projectName,
+  projects = [],
+  currentProjectId,
+  onSelectProject,
+  mode,
+  isSidebarCollapsed = false,
 }) => {
   return (
     <header className="topbar">
       <button
-        className="icon-btn menu-btn"
+        className={`icon-btn menu-btn ${isSidebarCollapsed ? 'collapsed' : ''}`}
         id="menuBtn"
-        aria-label="打开菜单"
+        aria-label={isSidebarCollapsed ? '展开导航菜单' : '收起导航菜单'}
+        title={isSidebarCollapsed ? '展开导航菜单' : '收起导航菜单'}
         onClick={onToggleMenu}
       >
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
@@ -37,15 +48,43 @@ export const TopBar: React.FC<TopBarProps> = ({
         </svg>
       </button>
 
-      <div
-        className="workspace"
-        style={{ cursor: 'pointer' }}
-        onClick={() => onShowToast('当前项目', projectName || '请先选择有权限的项目')}
-        title="点击查看项目工作区信息"
-      >
-        <div className="workspace-logo">BG</div>
-        <b>{projectName || 'Bgeo · 选择项目'}</b>
-        <span className="chev">⌄</span>
+      <div className="workspace-selector">
+        <div className="workspace-logo" aria-hidden="true">
+          {projectName ? projectName.slice(0, 2).toUpperCase() : 'BG'}
+        </div>
+        {projects && projects.length > 0 ? (
+          <div className="workspace-select-wrap">
+            <select
+              className="workspace-select"
+              value={currentProjectId}
+              onChange={(e) => onSelectProject?.(e.target.value)}
+              aria-label="切换项目"
+              title="切换当前项目"
+            >
+              {projects.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <span className="workspace-chev" aria-hidden="true">▾</span>
+          </div>
+        ) : (
+          <div
+            className="workspace-name-wrap"
+            onClick={() => onShowToast('当前项目', projectName || '请先选择有权限的项目')}
+            title="当前项目"
+          >
+            <b>{projectName || 'Bgeo · 选择项目'}</b>
+          </div>
+        )}
+
+        {mode === 'demo' && (
+          <span className="demo-pill" title="演示模式：样本不计入真实效果指标">
+            <span className="demo-dot"></span>
+            演示模式
+          </span>
+        )}
       </div>
 
       <label className="top-search">

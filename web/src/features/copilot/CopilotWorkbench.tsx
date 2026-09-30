@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bot,
@@ -6,6 +6,8 @@ import {
   ArrowUp,
   PlusCircle,
   Trash2,
+  Pencil,
+  Check,
   Loader2,
   BarChart3,
   Play,
@@ -28,11 +30,15 @@ import {
   RefreshCw,
   X,
   ExternalLink,
+  Copy,
 } from 'lucide-react';
 import type { CopilotSession, CopilotMessage, CopilotActionPreview, AgentExecutionTrace } from '../../types';
 import { api, streamSSE } from '../../services/api';
 import { CopilotActionCard } from '../../components/copilot/CopilotActionCard';
+import { ThoughtChainCard } from '../../components/copilot/ThoughtChainCard';
 import { AgentTraceTimeline } from './AgentTraceTimeline';
+import { MarkdownView } from '../../components/common/MarkdownView';
+import { groupSessionsByDate } from '../../utils/sessionGrouping';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -75,131 +81,331 @@ const WELCOME_CONTENT = `你好，我是 **GeoPilot 运营副驾驶**。
 // Sub-components
 // ---------------------------------------------------------------------------
 
-/** 左栏：会话列表 */
-const SessionSidebar: React.FC<{
+/** 左栏：会话列表 (支持分组与重命名/删除) */
+interface SessionSidebarProps {
   sessions: CopilotSession[];
   currentSessionId: string | null;
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete: (e: React.MouseEvent, id: string) => void;
-}> = ({ sessions, currentSessionId, onSelect, onNew, onDelete }) => (
-  <div
-    style={{
-      width: '220px',
-      flexShrink: 0,
-      borderRight: '1px solid rgba(226, 232, 240, 0.8)',
-      display: 'flex',
-      flexDirection: 'column',
-      background: '#f8fafc',
-      height: '100%',
-      overflow: 'hidden',
-    }}
-  >
-    {/* Header */}
+  onRename: (id: string, newTitle: string) => void;
+}
+
+const SessionSidebar: React.FC<SessionSidebarProps> = ({
+  sessions,
+  currentSessionId,
+  onSelect,
+  onNew,
+  onDelete,
+  onRename,
+}) => {
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const groups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
+
+  const startEditing = (e: React.MouseEvent, s: CopilotSession) => {
+    e.stopPropagation();
+    setEditingId(s.id);
+    setEditingTitle(s.title);
+  };
+
+  const cancelEditing = (e?: React.MouseEvent) => {
+    e?.stopPropagation();
+    setEditingId(null);
+    setEditingTitle('');
+  };
+
+  const submitEditing = (e?: React.MouseEvent | React.FormEvent, id?: string) => {
+    e?.stopPropagation();
+    if (!editingId) return;
+    const targetId = id || editingId;
+    if (editingTitle.trim()) {
+      onRename(targetId, editingTitle.trim());
+    }
+    setEditingId(null);
+    setEditingTitle('');
+  };
+
+  return (
     <div
       style={{
-        height: '52px',
-        padding: '0 14px',
-        borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
+        width: '230px',
         flexShrink: 0,
-        boxSizing: 'border-box',
+        borderRight: '1px solid rgba(226, 232, 240, 0.8)',
+        display: 'flex',
+        flexDirection: 'column',
+        background: '#f8fafc',
+        height: '100%',
+        overflow: 'hidden',
       }}
     >
-      <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-        会话历史
-      </span>
-      <button
-        type="button"
-        onClick={onNew}
-        title="新建会话"
+      {/* Header */}
+      <div
         style={{
+          height: '52px',
+          padding: '0 14px',
+          borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
           display: 'flex',
           alignItems: 'center',
-          gap: '4px',
-          padding: '4px 8px',
-          borderRadius: '6px',
-          background: '#0f172a',
-          color: '#f8fafc',
-          border: 'none',
-          cursor: 'pointer',
-          fontSize: '11px',
-          fontWeight: 500,
+          justifyContent: 'space-between',
+          flexShrink: 0,
+          boxSizing: 'border-box',
         }}
       >
-        <PlusCircle size={12} />
-        新建
-      </button>
-    </div>
+        <span
+          style={{
+            fontSize: '12px',
+            fontWeight: 650,
+            color: '#475467',
+            letterSpacing: '0.02em',
+          }}
+        >
+          会话历史
+        </span>
+        <button
+          type="button"
+          onClick={onNew}
+          title="新建会话"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '4px 9px',
+            borderRadius: '6px',
+            background: '#0f172a',
+            color: '#f8fafc',
+            border: 'none',
+            cursor: 'pointer',
+            fontSize: '11px',
+            fontWeight: 550,
+            transition: 'background 0.15s ease',
+          }}
+          onMouseEnter={(e) => (e.currentTarget.style.background = '#1e293b')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = '#0f172a')}
+        >
+          <PlusCircle size={13} />
+          新建
+        </button>
+      </div>
 
-    {/* Session list */}
-    <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
-      {sessions.length === 0 ? (
-        <div style={{ padding: '32px 0', textAlign: 'center', fontSize: '11px', color: '#94a3b8' }}>
-          暂无历史会话
-        </div>
-      ) : (
-        sessions.map((s) => (
-          <div
-            key={s.id}
-            onClick={() => onSelect(s.id)}
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '8px 10px',
-              borderRadius: '8px',
-              cursor: 'pointer',
-              marginBottom: '2px',
-              background: currentSessionId === s.id ? '#fff' : 'transparent',
-              border: currentSessionId === s.id ? '1px solid #e2e8f0' : '1px solid transparent',
-              boxShadow: currentSessionId === s.id ? '0 1px 3px rgba(0,0,0,0.06)' : 'none',
-              transition: 'background 0.12s, border-color 0.12s',
-            }}
-            onMouseEnter={(e) => {
-              if (currentSessionId !== s.id) (e.currentTarget as HTMLDivElement).style.background = '#f1f5f9';
-            }}
-            onMouseLeave={(e) => {
-              if (currentSessionId !== s.id) (e.currentTarget as HTMLDivElement).style.background = 'transparent';
-            }}
-          >
-            <div style={{ minWidth: 0, flex: 1, marginRight: '6px' }}>
-              <div style={{ fontSize: '12px', fontWeight: 500, color: '#1e293b', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                {s.title}
-              </div>
-              <div style={{ fontSize: '10px', color: '#94a3b8', marginTop: '2px', fontFamily: 'ui-monospace,monospace' }}>
-                {new Date(s.last_active_at).toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={(e) => onDelete(e, s.id)}
-              title="删除会话"
-              style={{
-                background: 'none',
-                border: 'none',
-                cursor: 'pointer',
-                padding: '2px',
-                borderRadius: '4px',
-                color: '#94a3b8',
-                display: 'flex',
-                alignItems: 'center',
-                opacity: 0,
-                transition: 'opacity 0.1s',
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.opacity = '1')}
-              onMouseLeave={(e) => (e.currentTarget.style.opacity = '0')}
-            >
-              <Trash2 size={12} />
-            </button>
+      {/* Session list grouped */}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
+        {groups.length === 0 ? (
+          <div style={{ padding: '36px 0', textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
+            暂无历史会话
           </div>
-        ))
-      )}
+        ) : (
+          groups.map((group) => (
+            <div key={group.label} style={{ marginBottom: '12px' }}>
+              <div
+                style={{
+                  fontSize: '11px',
+                  fontWeight: 650,
+                  color: '#94a3b8',
+                  padding: '6px 8px 4px',
+                  letterSpacing: '0.04em',
+                }}
+              >
+                {group.label}
+              </div>
+
+              {group.items.map((s) => {
+                const isSelected = currentSessionId === s.id;
+                const isHovered = hoveredId === s.id;
+                const isEditing = editingId === s.id;
+
+                return (
+                  <div
+                    key={s.id}
+                    onClick={() => {
+                      if (!isEditing) onSelect(s.id);
+                    }}
+                    onMouseEnter={() => setHoveredId(s.id)}
+                    onMouseLeave={() => setHoveredId(null)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '8px 10px',
+                      borderRadius: '8px',
+                      cursor: isEditing ? 'default' : 'pointer',
+                      marginBottom: '2px',
+                      background: isSelected ? '#e2e8f0' : isHovered ? '#f1f5f9' : 'transparent',
+                      border: 'none',
+                      boxShadow: 'none',
+                      transition: 'background 0.12s ease',
+                    }}
+                  >
+                    {isEditing ? (
+                      <div
+                        style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '4px' }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <input
+                          autoFocus
+                          type="text"
+                          value={editingTitle}
+                          onChange={(e) => setEditingTitle(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') submitEditing(e, s.id);
+                            if (e.key === 'Escape') cancelEditing();
+                          }}
+                          style={{
+                            flex: 1,
+                            minWidth: 0,
+                            padding: '3px 6px',
+                            fontSize: '12px',
+                            borderRadius: '4px',
+                            border: '1px solid #3b82f6',
+                            outline: 'none',
+                            background: '#fff',
+                            color: '#1e293b',
+                          }}
+                        />
+                        <button
+                          type="button"
+                          onClick={(e) => submitEditing(e, s.id)}
+                          title="保存"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#10b981',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <Check size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => cancelEditing(e)}
+                          title="取消"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            cursor: 'pointer',
+                            color: '#94a3b8',
+                            padding: '2px',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          <X size={13} />
+                        </button>
+                      </div>
+                    ) : (
+                      <>
+                        <div style={{ minWidth: 0, flex: 1, marginRight: '6px' }}>
+                          <div
+                            style={{
+                              fontSize: '12px',
+                              fontWeight: isSelected ? 600 : 500,
+                              color: isSelected ? '#0f172a' : '#334155',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                            }}
+                            title={s.title}
+                          >
+                            {s.title}
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '10px',
+                              color: '#94a3b8',
+                              marginTop: '2px',
+                              fontFamily: 'ui-monospace,monospace',
+                            }}
+                          >
+                            {new Date(s.last_active_at || s.created_at).toLocaleString('zh-CN', {
+                              month: 'numeric',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </div>
+                        </div>
+
+                        {/* Actions: Rename & Delete */}
+                        <div
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '2px',
+                            opacity: isHovered || isSelected ? 1 : 0,
+                            transition: 'opacity 0.15s ease',
+                          }}
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <button
+                            type="button"
+                            onClick={(e) => startEditing(e, s)}
+                            title="重命名会话"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              transition: 'color 0.12s, background 0.12s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = '#2563eb';
+                              e.currentTarget.style.background = '#e0e7ff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = '#64748b';
+                              e.currentTarget.style.background = 'none';
+                            }}
+                          >
+                            <Pencil size={12} />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => onDelete(e, s.id)}
+                            title="删除会话"
+                            style={{
+                              background: 'none',
+                              border: 'none',
+                              cursor: 'pointer',
+                              padding: '4px',
+                              borderRadius: '4px',
+                              color: '#64748b',
+                              display: 'flex',
+                              alignItems: 'center',
+                              transition: 'color 0.12s, background 0.12s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = '#e11d48';
+                              e.currentTarget.style.background = '#ffe4e6';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = '#64748b';
+                              e.currentTarget.style.background = 'none';
+                            }}
+                          >
+                            <Trash2 size={12} />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ))
+        )}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 /** 右栏：Harness 运行面板 */
 const HarnessPanel: React.FC<{
@@ -445,6 +651,14 @@ export const CopilotWorkbench: React.FC = () => {
   const [requestError, setRequestError] = useState('');
   useEffect(()=>{if(!currentSessionId)return;const timer=setInterval(()=>{if(!isStreaming&&messages.some(m=>m.card_status==='queued'))void loadSessionDetails(currentSessionId)},3000);return()=>clearInterval(timer)},[currentSessionId,isStreaming,messages]);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [activeToolArgs, setActiveToolArgs] = useState<any>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+
+  const handleCopyMessage = (content: string, id: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedMsgId(id);
+    setTimeout(() => setCopiedMsgId(null), 1800);
+  };
   const [enabledSkills, setEnabledSkills] = useState<string[]>(
     ['monitor', 'diagnosis', 'content', 'evolution']
   );
@@ -517,7 +731,23 @@ export const CopilotWorkbench: React.FC = () => {
     try {
       setCurrentSessionId(sessionId);
       const res = await api.getCopilotSession(sessionId);
-      setMessages(res.messages || []);
+      const traceMap: Record<string, any[]> = {};
+      if (res.traces) {
+        for (const t of res.traces) {
+          try {
+            if (t.timeline_json) traceMap[t.id] = JSON.parse(t.timeline_json);
+          } catch {
+            // ignore
+          }
+        }
+      }
+      const msgs = (res.messages || []).map((m) => {
+        if (m.trace_id && traceMap[m.trace_id]) {
+          return { ...m, steps: traceMap[m.trace_id] };
+        }
+        return m;
+      });
+      setMessages(msgs);
     } catch {
       setMessages([]);
     }
@@ -538,10 +768,24 @@ export const CopilotWorkbench: React.FC = () => {
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
+    if (!window.confirm('确定要删除此会话记录吗？')) return;
     try {
       await api.deleteCopilotSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (currentSessionId === sessionId) startNewSession();
+    } catch {
+      // ignore
+    }
+  };
+
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    try {
+      await api.renameCopilotSession(sessionId, trimmed);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title: trimmed } : s))
+      );
     } catch {
       // ignore
     }
@@ -596,19 +840,17 @@ export const CopilotWorkbench: React.FC = () => {
               return updated;
             });
           },
-          onToolStart: (tool: string) => setActiveTool(tool),
-          onToolDone: (_tool: string, result: string) => {
+          onToolStart: (tool: string, args: any) => {
+            setActiveTool(tool);
+            setActiveToolArgs(args);
+          },
+          onToolDone: (_tool: string) => {
             setActiveTool(null);
-            fullContent += `\n\n${result}`;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') last.content = fullContent;
-              return updated;
-            });
+            setActiveToolArgs(null);
           },
           onInterrupt: (preview: CopilotActionPreview) => {
             setActiveTool(null);
+            setActiveToolArgs(null);
             setMessages((prev) => {
               const updated = [...prev];
               const last = updated[updated.length - 1];
@@ -625,23 +867,24 @@ export const CopilotWorkbench: React.FC = () => {
               setCurrentSessionId(data.session_id);
               loadSessions();
             }
-            if (data.trace_id) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last && last.role === 'assistant') {
-                  last.trace_id = data.trace_id;
-                }
-                return updated;
-              });
-            }
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.role === 'assistant') {
+                if (data.trace_id) last.trace_id = data.trace_id;
+                if (data.steps) last.steps = data.steps;
+              }
+              return updated;
+            });
             setIsStreaming(false);
             setActiveTool(null);
+            setActiveToolArgs(null);
           },
           onError: (error) => {
             setRequestError(error.message);
             setIsStreaming(false);
             setActiveTool(null);
+            setActiveToolArgs(null);
           },
         }
       );
@@ -752,6 +995,7 @@ export const CopilotWorkbench: React.FC = () => {
         onSelect={loadSessionDetails}
         onNew={startNewSession}
         onDelete={handleDeleteSession}
+        onRename={handleRenameSession}
       />
 
       {/* ── 中栏：对话主区 ─────────────────────────────── */}
@@ -870,8 +1114,9 @@ export const CopilotWorkbench: React.FC = () => {
             background: 'rgba(248, 250, 252, 0.3)',
           }}
         >
-          {messages.map((m) => {
+          {messages.map((m, index) => {
             const isUser = m.role === 'user';
+            const isCurrentStreaming = isStreaming && !isUser && index === messages.length - 1;
             let previewData: CopilotActionPreview | null = null;
             if (m.card_payload) {
               try { previewData = JSON.parse(m.card_payload); } catch { /* ignore */ }
@@ -905,33 +1150,51 @@ export const CopilotWorkbench: React.FC = () => {
                       </span>
                     )}
 
-                    <div
-                      style={{
-                        borderRadius: isUser ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
-                        padding: '10px 14px',
-                        fontSize: '12px',
-                        lineHeight: 1.7,
-                        ...(isUser
-                          ? { background: '#0f172a', color: '#f8fafc', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
-                          : {
-                              background: '#fff',
-                              color: '#1e293b',
-                              border: '1px solid rgba(226, 232, 240, 0.9)',
-                              boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
-                            }),
-                      }}
-                    >
-                      <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                    {!isUser && (
+                      <ThoughtChainCard
+                        steps={m.steps}
+                        activeTool={isCurrentStreaming ? activeTool : null}
+                        activeToolArgs={isCurrentStreaming ? activeToolArgs : null}
+                        isRunning={isCurrentStreaming && (!!activeTool || !m.content)}
+                      />
+                    )}
 
-                      {previewData && (
-                        <CopilotActionCard
-                          preview={previewData}
-                          status={m.card_status || 'pending'}
-                          onConfirm={handleConfirmAction}
-                          onCancel={handleCancelAction}
-                        />
-                      )}
-                    </div>
+                    {(m.content || isCurrentStreaming) && (
+                      <div
+                        style={{
+                          borderRadius: isUser ? '14px 14px 4px 14px' : '4px 14px 14px 14px',
+                          padding: '10px 14px',
+                          fontSize: '12px',
+                          lineHeight: 1.7,
+                          ...(isUser
+                            ? { background: '#0f172a', color: '#f8fafc', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
+                            : {
+                                background: '#fff',
+                                color: '#1e293b',
+                                border: '1px solid rgba(226, 232, 240, 0.9)',
+                                boxShadow: '0 1px 2px rgba(0,0,0,0.04)',
+                              }),
+                        }}
+                      >
+                        {isUser ? (
+                          <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                        ) : (
+                          <MarkdownView
+                            content={m.content}
+                            isStreaming={isCurrentStreaming}
+                          />
+                        )}
+
+                        {previewData && (
+                          <CopilotActionCard
+                            preview={previewData}
+                            status={m.card_status || 'pending'}
+                            onConfirm={handleConfirmAction}
+                            onCancel={handleCancelAction}
+                          />
+                        )}
+                      </div>
+                    )}
 
                     <div
                       style={{
@@ -953,34 +1216,59 @@ export const CopilotWorkbench: React.FC = () => {
                       </span>
 
                       {!isUser && m.content && (
-                        <button
-                          onClick={() => handleOpenTrace(m.trace_id)}
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 3,
-                            background: 'transparent',
-                            border: 'none',
-                            color: '#64748b',
-                            fontSize: '10px',
-                            cursor: 'pointer',
-                            padding: '1px 5px',
-                            borderRadius: '4px',
-                            transition: 'all 0.15s',
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#0284c7';
-                            e.currentTarget.style.background = '#f0f9ff';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#64748b';
-                            e.currentTarget.style.background = 'transparent';
-                          }}
-                          title="查看本次执行全流程运行日志与时间线"
-                        >
-                          <Activity size={10} color="#0284c7" />
-                          运行日志
-                        </button>
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => handleCopyMessage(m.content, m.id)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              background: 'transparent',
+                              border: 'none',
+                              color: copiedMsgId === m.id ? '#10b981' : '#64748b',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              transition: 'all 0.15s',
+                            }}
+                            title="复制回答内容"
+                          >
+                            {copiedMsgId === m.id ? <Check size={10} color="#10b981" /> : <Copy size={10} />}
+                            <span>{copiedMsgId === m.id ? '已复制' : '复制回答'}</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => handleOpenTrace(m.trace_id)}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: 3,
+                              background: 'transparent',
+                              border: 'none',
+                              color: '#64748b',
+                              fontSize: '10px',
+                              cursor: 'pointer',
+                              padding: '1px 5px',
+                              borderRadius: '4px',
+                              transition: 'all 0.15s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.color = '#0284c7';
+                              e.currentTarget.style.background = '#f0f9ff';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.color = '#64748b';
+                              e.currentTarget.style.background = 'transparent';
+                            }}
+                            title="查看本次执行全流程运行日志与时间线"
+                          >
+                            <Activity size={10} color="#0284c7" />
+                            运行日志
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>

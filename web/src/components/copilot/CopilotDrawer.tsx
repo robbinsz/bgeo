@@ -7,6 +7,8 @@ import {
   PlusCircle,
   History,
   Trash2,
+  Pencil,
+  Check,
   SlidersHorizontal,
   Loader2,
   Maximize2,
@@ -17,10 +19,14 @@ import {
   Clock,
   Sliders,
   SendHorizontal,
+  Copy,
 } from 'lucide-react';
 import type { ViewType, CopilotSession, CopilotMessage, CopilotActionPreview } from '../../types';
 import { api, streamSSE } from '../../services/api';
 import { CopilotActionCard } from './CopilotActionCard';
+import { ThoughtChainCard } from './ThoughtChainCard';
+import { MarkdownView } from '../common/MarkdownView';
+import { groupSessionsByDate } from '../../utils/sessionGrouping';
 
 interface CopilotDrawerProps {
   isOpen: boolean;
@@ -63,8 +69,18 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
   const [requestError, setRequestError] = useState('');
   useEffect(()=>{if(!currentSessionId)return;const timer=setInterval(()=>{if(!isStreaming&&messages.some(m=>m.card_status==='queued'))void loadSessionDetails(currentSessionId)},3000);return()=>clearInterval(timer)},[currentSessionId,isStreaming,messages]);
   const [activeTool, setActiveTool] = useState<string | null>(null);
+  const [activeToolArgs, setActiveToolArgs] = useState<any>(null);
+  const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
+
+  const handleCopyMessage = (content: string, id: string) => {
+    navigator.clipboard.writeText(content);
+    setCopiedMsgId(id);
+    setTimeout(() => setCopiedMsgId(null), 1800);
+  };
   const [showHistory, setShowHistory] = useState(false);
   const [isExpanded, setIsExpanded] = useState(false);
+  const [editingSessionId, setEditingSessionId] = useState<string | null>(null);
+  const [editingTitle, setEditingTitle] = useState('');
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
@@ -103,7 +119,23 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
       setCurrentSessionId(sessionId);
       setShowHistory(false);
       const res = await api.getCopilotSession(sessionId);
-      setMessages(res.messages || []);
+      const traceMap: Record<string, any[]> = {};
+      if (res.traces) {
+        for (const t of res.traces) {
+          try {
+            if (t.timeline_json) traceMap[t.id] = JSON.parse(t.timeline_json);
+          } catch {
+            // ignore
+          }
+        }
+      }
+      const msgs = (res.messages || []).map((m) => {
+        if (m.trace_id && traceMap[m.trace_id]) {
+          return { ...m, steps: traceMap[m.trace_id] };
+        }
+        return m;
+      });
+      setMessages(msgs);
     } catch {
       setMessages([]);
     }
@@ -125,12 +157,26 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
 
   const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
     e.stopPropagation();
+    if (!window.confirm('确定要删除此会话记录吗？')) return;
     try {
       await api.deleteCopilotSession(sessionId);
       setSessions((prev) => prev.filter((s) => s.id !== sessionId));
       if (currentSessionId === sessionId) {
         startNewSession();
       }
+    } catch {
+      // Ignore
+    }
+  };
+
+  const handleRenameSession = async (sessionId: string, newTitle: string) => {
+    const trimmed = newTitle.trim();
+    if (!trimmed) return;
+    try {
+      await api.renameCopilotSession(sessionId, trimmed);
+      setSessions((prev) =>
+        prev.map((s) => (s.id === sessionId ? { ...s, title: trimmed } : s))
+      );
     } catch {
       // Ignore
     }
@@ -190,23 +236,17 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
               return updated;
             });
           },
-          onToolStart: (tool: string) => {
+          onToolStart: (tool: string, args: any) => {
             setActiveTool(tool);
+            setActiveToolArgs(args);
           },
-          onToolDone: (_tool: string, result: string) => {
+          onToolDone: (_tool: string) => {
             setActiveTool(null);
-            fullContent += `\n\n${result}`;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') {
-                last.content = fullContent;
-              }
-              return updated;
-            });
+            setActiveToolArgs(null);
           },
           onInterrupt: (preview: CopilotActionPreview) => {
             setActiveTool(null);
+            setActiveToolArgs(null);
             setMessages((prev) => {
               const updated = [...prev];
               const last = updated[updated.length - 1];
@@ -223,13 +263,24 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
               setCurrentSessionId(data.session_id);
               loadSessions();
             }
+            setMessages((prev) => {
+              const updated = [...prev];
+              const last = updated[updated.length - 1];
+              if (last && last.role === 'assistant') {
+                if (data.trace_id) last.trace_id = data.trace_id;
+                if (data.steps) last.steps = data.steps;
+              }
+              return updated;
+            });
             setIsStreaming(false);
             setActiveTool(null);
+            setActiveToolArgs(null);
           },
           onError: (error) => {
             setRequestError(error.message);
             setIsStreaming(false);
             setActiveTool(null);
+            setActiveToolArgs(null);
           },
         }
       );
@@ -425,35 +476,116 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
             {sessions.length === 0 ? (
               <div className="py-16 text-center text-xs text-slate-400">暂无历史会话</div>
             ) : (
-              <div className="space-y-2">
-                {sessions.map((s) => (
-                  <div
-                    key={s.id}
-                    onClick={() => loadSessionDetails(s.id)}
-                    className={`group flex items-center justify-between rounded-xl border p-3 cursor-pointer transition ${
-                      currentSessionId === s.id
-                        ? 'border-slate-800 bg-white shadow-xs'
-                        : 'border-slate-200/80 bg-white hover:border-slate-300 hover:bg-slate-50/80'
-                    }`}
-                  >
-                    <div className="min-w-0 flex-1 pr-2">
-                      <div className="truncate text-xs font-medium text-slate-900">{s.title}</div>
-                      <div className="text-[10px] text-slate-400 mt-1 font-mono">
-                        {new Date(s.last_active_at).toLocaleString('zh-CN', {
-                          month: 'numeric',
-                          day: 'numeric',
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </div>
+              <div className="space-y-4">
+                {groupSessionsByDate(sessions).map((group) => (
+                  <div key={group.label}>
+                    <div className="text-[11px] font-semibold text-slate-400 mb-1.5 px-1 tracking-wider">
+                      {group.label}
                     </div>
-                    <button
-                      type="button"
-                      onClick={(e) => handleDeleteSession(e, s.id)}
-                      className="opacity-0 group-hover:opacity-100 rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-rose-600 transition"
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </button>
+                    <div className="space-y-1.5">
+                      {group.items.map((s) => {
+                        const isSelected = currentSessionId === s.id;
+                        const isEditing = editingSessionId === s.id;
+
+                        return (
+                          <div
+                            key={s.id}
+                            onClick={() => {
+                              if (!isEditing) loadSessionDetails(s.id);
+                            }}
+                            className={`group flex items-center justify-between rounded-lg px-3 py-2.5 cursor-pointer transition ${
+                              isSelected
+                                ? 'bg-slate-200/80 text-slate-900 font-medium'
+                                : 'text-slate-700 hover:bg-slate-100'
+                            }`}
+                          >
+                            {isEditing ? (
+                              <div
+                                className="flex items-center w-full space-x-1.5"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <input
+                                  autoFocus
+                                  type="text"
+                                  value={editingTitle}
+                                  onChange={(e) => setEditingTitle(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === 'Enter') {
+                                      handleRenameSession(s.id, editingTitle);
+                                      setEditingSessionId(null);
+                                    }
+                                    if (e.key === 'Escape') {
+                                      setEditingSessionId(null);
+                                    }
+                                  }}
+                                  className="flex-1 rounded border border-blue-500 px-2 py-1 text-xs text-slate-800 bg-white outline-none"
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    handleRenameSession(s.id, editingTitle);
+                                    setEditingSessionId(null);
+                                  }}
+                                  title="保存"
+                                  className="rounded p-1 text-emerald-600 hover:bg-emerald-50"
+                                >
+                                  <Check className="h-3.5 w-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingSessionId(null)}
+                                  title="取消"
+                                  className="rounded p-1 text-slate-400 hover:bg-slate-100"
+                                >
+                                  <X className="h-3.5 w-3.5" />
+                                </button>
+                              </div>
+                            ) : (
+                              <>
+                                <div className="min-w-0 flex-1 pr-2">
+                                  <div className="truncate text-xs font-medium text-slate-900" title={s.title}>
+                                    {s.title}
+                                  </div>
+                                  <div className="text-[10px] text-slate-400 mt-1 font-mono">
+                                    {new Date(s.last_active_at || s.created_at).toLocaleString('zh-CN', {
+                                      month: 'numeric',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    })}
+                                  </div>
+                                </div>
+                                <div
+                                  className="flex items-center space-x-1 opacity-0 group-hover:opacity-100 transition"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setEditingSessionId(s.id);
+                                      setEditingTitle(s.title);
+                                    }}
+                                    title="重命名会话"
+                                    className="rounded p-1 text-slate-400 hover:bg-blue-50 hover:text-blue-600 transition"
+                                  >
+                                    <Pencil className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => handleDeleteSession(e, s.id)}
+                                    title="删除会话"
+                                    className="rounded p-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 transition"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 ))}
               </div>
@@ -462,8 +594,9 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
         ) : (
           /* Chat Message Stream - Clean Claude / ChatGPT layout */
           <div className="flex-1 overflow-y-auto p-6 space-y-6 bg-slate-50/30">
-            {messages.map((m) => {
+            {messages.map((m, index) => {
               const isUser = m.role === 'user';
+              const isCurrentStreaming = isStreaming && !isUser && index === messages.length - 1;
               let previewData: CopilotActionPreview | null = null;
               if (m.card_payload) {
                 try {
@@ -492,32 +625,68 @@ export const CopilotDrawer: React.FC<CopilotDrawerProps> = ({
                         </span>
                       )}
 
-                      <div
-                        className={`rounded-2xl px-4 py-3 text-xs leading-relaxed ${
-                          isUser
-                            ? 'bg-slate-900 text-slate-50 rounded-tr-xs shadow-xs'
-                            : 'border border-slate-200/90 bg-white text-slate-800 rounded-tl-xs shadow-2xs'
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap">{m.content}</div>
+                      {!isUser && (
+                        <ThoughtChainCard
+                          steps={m.steps}
+                          activeTool={isCurrentStreaming ? activeTool : null}
+                          activeToolArgs={isCurrentStreaming ? activeToolArgs : null}
+                          isRunning={isCurrentStreaming && (!!activeTool || !m.content)}
+                        />
+                      )}
 
-                        {/* Action Confirmation Card if any */}
-                        {previewData && (
-                          <CopilotActionCard
-                            preview={previewData}
-                            status={m.card_status || 'pending'}
-                            onConfirm={handleConfirmAction}
-                            onCancel={handleCancelAction}
-                          />
+                      {(m.content || isCurrentStreaming) && (
+                        <div
+                          className={`rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                            isUser
+                              ? 'bg-slate-900 text-slate-50 rounded-tr-xs shadow-xs'
+                              : 'border border-slate-200/90 bg-white text-slate-800 rounded-tl-xs shadow-2xs'
+                          }`}
+                        >
+                          {isUser ? (
+                            <div className="whitespace-pre-wrap">{m.content}</div>
+                          ) : (
+                            <MarkdownView
+                              content={m.content}
+                              isStreaming={isCurrentStreaming}
+                            />
+                          )}
+
+                          {/* Action Confirmation Card if any */}
+                          {previewData && (
+                            <CopilotActionCard
+                              preview={previewData}
+                              status={m.card_status || 'pending'}
+                              onConfirm={handleConfirmAction}
+                              onCancel={handleCancelAction}
+                            />
+                          )}
+                        </div>
+                      )}
+
+                      <div className="mt-1 px-1 flex items-center gap-2">
+                        <span className="text-[10px] text-slate-400 font-mono">
+                          {new Date(m.created_at).toLocaleTimeString('zh-CN', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </span>
+
+                        {!isUser && m.content && (
+                          <button
+                            type="button"
+                            onClick={() => handleCopyMessage(m.content, m.id)}
+                            className="inline-flex items-center gap-1 text-[10px] text-slate-400 hover:text-slate-700 transition"
+                            title="复制回答内容"
+                          >
+                            {copiedMsgId === m.id ? (
+                              <Check className="h-3 w-3 text-emerald-500" />
+                            ) : (
+                              <Copy className="h-3 w-3" />
+                            )}
+                            <span>{copiedMsgId === m.id ? '已复制' : '复制'}</span>
+                          </button>
                         )}
                       </div>
-
-                      <span className="mt-1 px-1 text-[10px] text-slate-400 font-mono">
-                        {new Date(m.created_at).toLocaleTimeString('zh-CN', {
-                          hour: '2-digit',
-                          minute: '2-digit',
-                        })}
-                      </span>
                     </div>
 
                     {isUser && (

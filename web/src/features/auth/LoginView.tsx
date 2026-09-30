@@ -5,11 +5,13 @@ import { api } from '../../services/api';
 interface LoginViewProps {
   onLoginSuccess: (user: UserProfile) => void;
   onShowToast: (title: string, note?: string) => void;
+  onNavigateHome?: () => void;
 }
 
 export const LoginView: React.FC<LoginViewProps> = ({
   onLoginSuccess,
   onShowToast,
+  onNavigateHome,
 }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -55,18 +57,38 @@ export const LoginView: React.FC<LoginViewProps> = ({
   return (
     <div className="login-screen">
       <div className="login-card-container">
+        {/* Back to Landing Page Link */}
+        <div className="login-back-bar">
+          <a
+            href="/"
+            className="login-back-link"
+            title="返回官网首页"
+            onClick={(e) => {
+              if (onNavigateHome) {
+                e.preventDefault();
+                onNavigateHome();
+              }
+            }}
+          >
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ width: 14, height: 14 }}>
+              <line x1="19" y1="12" x2="5" y2="12" />
+              <polyline points="12 19 5 12 12 5" />
+            </svg>
+            <span>返回官网首页</span>
+          </a>
+        </div>
+
         {/* Brand Header */}
         <div className="login-brand">
           <div className="login-logo-chip" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M16.5 7.5A7.5 7.5 0 1 0 19 13" />
-              <path d="m15.5 4.5 4 3-4 3" />
-              <circle cx="11.5" cy="12" r="2.2" />
+            <svg viewBox="0 0 64 64" fill="none" style={{ width: 24, height: 24 }}>
+              <path d="M43 21a17 17 0 1 0 4 17" stroke="white" strokeWidth="6.5" strokeLinecap="round" />
+              <path d="m40 14 8 6-8 6" stroke="#c7d2fe" strokeWidth="5.5" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </div>
           <div className="login-brand-meta">
             <div className="login-brand-title">
-              Bgeo
+              GeoPilot (Bgeo)
               <span className="login-chip-tag">bgeo.cc · 自主运营</span>
             </div>
             <p className="login-brand-sub">基于大模型检索自进化的企业级 GEO 品牌声量与可见度运营平台</p>

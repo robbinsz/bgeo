@@ -124,9 +124,15 @@ export const api = {
       session: import('../types').CopilotSession;
       messages: import('../types').CopilotMessage[];
       checkpoint: any;
+      traces?: import('../types').AgentExecutionTrace[];
     }>(`/copilot/sessions/${id}`),
   deleteCopilotSession: (id: string) =>
     request<{ status: string }>(`/copilot/sessions/${id}`, { method: 'DELETE' }),
+  renameCopilotSession: (id: string, title: string) =>
+    request<{ status: string; title: string }>(`/copilot/sessions/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ title }),
+    }),
   getCopilotAuditLogs: () => request<{ items: import('../types').CopilotAuditLog[] }>('/copilot/audit-logs'),
 
   // AI Configuration API
@@ -282,7 +288,7 @@ export async function streamSSE(
           if (eventType === 'message_chunk') {
             callbacks.onChunk?.(parsed.chunk);
           } else if (eventType === 'tool_start') {
-            callbacks.onToolStart?.(parsed.tool, parsed.args);
+            callbacks.onToolStart?.(parsed.tool, parsed.arguments || parsed.args);
           } else if (eventType === 'tool_done') {
             callbacks.onToolDone?.(parsed.tool, parsed.result);
           } else if (eventType === 'interrupt') {

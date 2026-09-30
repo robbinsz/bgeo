@@ -43,6 +43,7 @@ export interface CopilotMessage {
   card_payload?: string;
   card_status?: string;
   trace_id?: string;
+  steps?: AgentExecutionStep[];
   created_at: string;
 }
 

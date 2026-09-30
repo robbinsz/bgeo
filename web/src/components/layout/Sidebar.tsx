@@ -7,6 +7,7 @@ interface SidebarProps {
   currentView?: ViewType;
   onNavigate?: (view: ViewType) => void;
   isOpen: boolean;
+  isCollapsed?: boolean;
   onClose: () => void;
   currentUser?: UserProfile | null;
   onLogout?: () => void;
@@ -15,13 +16,18 @@ interface SidebarProps {
 
 export const Sidebar: React.FC<SidebarProps> = ({
   isOpen,
+  isCollapsed = false,
   onClose,
   currentUser,
   onLogout,
   onOpenProfile,
 }) => {
   return (
-    <aside className={`sidebar ${isOpen ? 'open' : ''}`} id="sidebar" aria-label="主导航">
+    <aside
+      className={`sidebar ${isOpen ? 'open' : ''} ${isCollapsed ? 'collapsed' : ''}`}
+      id="sidebar"
+      aria-label="主导航"
+    >
       <div className="brand">
         <div className="brand-mark" aria-hidden="true">
           <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeLinecap="round" strokeLinejoin="round">
