@@ -43,17 +43,23 @@ make health
 
 | 命令 | 用途 |
 | --- | --- |
-| `make config` | 验证 Compose 和生产必需配置，不连接 Docker daemon，不输出密钥 |
-| `make build` | 构建应用、拉取基础服务镜像、验证 Caddy，不启动业务服务 |
-| `make install` | 空安装的一键部署 |
-| `make deploy` / `make up` | 已有安装的更新或恢复启动 |
-| `make bootstrap` | 首次安装中断后，为已迁移的空数据库创建管理员；业务容器必须停止 |
-| `make backup` | 停服一致性备份，结束后启动原来运行的容器 |
-| `make logs` | 跟踪最近 200 行服务日志，Ctrl+C 退出 |
-| `make status` / `make health` | 容器状态 / 公网 HTTPS 就绪检查 |
-| `make down` | 停止并移除容器和网络，保留数据、上传文件及证书持久卷 |
+| `make local-up` | **【本地环境】** Docker Compose 一键启动（PostgreSQL、API 自动迁移、Worker，访问 http://localhost:8080） |
+| `make local-down` | **【本地环境】** 停止并移除本地 Docker 容器网络（保留数据卷） |
+| `make local-logs` | **【本地环境】** 实时查看本地容器日志 |
+| `make local-status` | **【本地环境】** 查看本地容器运行状态及端口映射 |
+| `make prod-deploy` / `make deploy` | **【生产环境】** 生产一键平滑部署：构建、停服一致性备份、数据库迁移、启动并检查公网 HTTPS |
+| `make prod-install` / `make install` | **【生产环境】** 生产空安装一键部署：构建、启动数据库、迁移、初始化管理员、启动 Caddy |
+| `make prod-init` / `make init` | **【生产环境】** 生成私有生产配置 `.env.production` 与强加密密钥（0600 权限） |
+| `make prod-config` / `make config` | **【生产环境】** 验证生产必需配置，不输出密钥 |
+| `make prod-backup` / `make backup` | **【生产环境】** 停服一致性备份，结束后自动恢复原容器 |
+| `make prod-bootstrap` / `make bootstrap` | **【生产环境】** 为已迁移的空数据库创建管理员（修复安装中断） |
+| `make prod-logs` / `make logs` | **【生产环境】** 跟踪生产容器实时日志，Ctrl+C 退出 |
+| `make prod-status` / `make status` | **【生产环境】** 查看生产容器状态 |
+| `make prod-health` / `make health` | **【生产环境】** 检查公网 HTTPS /ready 健康探针 |
+| `make prod-down` / `make down` | **【生产环境】** 停止并移除生产容器和网络，保留所有持久卷 |
+| `make prod-build` / `make build` | **【生产环境】** 仅构建应用并拉取依赖镜像，不启动服务 |
 | `make check` | 运行部署安全流程测试，无需 Docker daemon |
-| `make dev` | 使用 `.env.go` 启动本机开发环境 |
+| `make dev` | 使用 `.env.go` 启动本机免 Docker 原生开发环境（SQLite） |
 
 `make down` 后沿用原配置执行 `make deploy` 即可恢复。首次安装在迁移前中断时，先 `make build`，使用下面的管理命令启动数据库并迁移；迁移已经完成时直接 `make bootstrap`，随后 `make deploy`。首次安装产生的数据卷保留，脚本不自动清空它。
 

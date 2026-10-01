@@ -4,7 +4,9 @@
 
 ## 启动
 
-已配置 `.env.go` 的本机 development / SQLite 安装可执行 `python3 scripts/start-local.py`，一次启动后端、Worker 和前端，按 Ctrl+C 停止。脚本沿用账号和密钥；schema 过旧时先备份 SQLite，再执行显式迁移，不写入演示数据。启动日志在 `data/local-run`。`python3 scripts/start-local.py --check` 只检查启动前置条件。
+本地开发提供了两种便捷环境：
+1. **Docker Compose 本地一键启动**：执行 `make local-up`，一键拉起 PostgreSQL、API（自动迁移）与 Worker，内置创建初始管理员并可通过 `http://localhost:8080` 直接访问 Web 控制台与接口。执行 `make local-down` 停止，`make local-logs` 查看日志。
+2. **本机免 Docker 原生启动**：执行 `make dev`（或 `python3 scripts/start-local.py`），使用 SQLite 一键启动后端、Worker 和前端 Vite（访问 `:5173`），按 Ctrl+C 停止。`make dev-check` 检查前置依赖。运行 `make help` 可查看完整的环境管理命令列表。
 
 需要 Go（版本见 go.mod）、Node.js 22.20+。复制 `.env.go.example` 为本机私有配置并导出环境变量；Go 不读取原有 Laravel `.env`。为两个 JWT 密钥分别生成随机值（至少 32 字节），为 `CREDENTIAL_ENCRYPTION_KEY` 设置 `openssl rand -base64 32` 生成的值。HTTP 与 Worker 必须使用相同密钥，保持密钥持久化。
 
