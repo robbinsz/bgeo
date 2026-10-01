@@ -3,6 +3,18 @@ import { render, act } from '@testing-library/react';
 import { MarkdownView } from './MarkdownView';
 
 describe('MarkdownView Component', () => {
+  it('removes executable HTML, dangerous URLs and injected code languages', () => {
+    const { container } = render(
+      <MarkdownView
+        content={
+          '<script>alert(1)</script><img src=x onerror="alert(1)"><iframe src="https://example.com"></iframe>\n\n[link](javascript:alert(1))\n\n```html"onclick="alert(1)\n<unsafe>\n```'
+        }
+      />,
+    );
+    expect(container.querySelector('script,iframe,[onerror],[onclick]')).toBeNull();
+    expect(container.innerHTML).not.toContain('href="javascript:');
+    expect(container.querySelector('code')?.textContent).toContain('<unsafe>');
+  });
   it('renders markdown headers, bold text, and lists into HTML elements', () => {
     const md = `### 1. 效果诊断
 - **优势维度**: 权威度高
@@ -41,9 +53,7 @@ describe('MarkdownView Component', () => {
     vi.useFakeTimers();
     const targetText = 'Hello World';
 
-    const { container, rerender } = render(
-      <MarkdownView content="" isStreaming={true} />
-    );
+    const { container, rerender } = render(<MarkdownView content="" isStreaming={true} />);
 
     // Now update content as if SSE chunk arrived
     rerender(<MarkdownView content={targetText} isStreaming={true} />);

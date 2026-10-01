@@ -35,6 +35,7 @@ export interface RefreshResponse {
 }
 
 const ACCESS_TOKEN_KEY = 'geopilot_access_token';
+let generation = 0;
 let refreshInFlight: Promise<string> | null = null;
 const USER_KEY = 'geopilot_user';
 
@@ -42,6 +43,7 @@ type AuthListener = (user: UserProfile | null) => void;
 const listeners = new Set<AuthListener>();
 
 export const authService = {
+  getGeneration: () => generation,
   getAccessToken(): string | null {
     return sessionStorage.getItem(ACCESS_TOKEN_KEY);
   },
@@ -61,6 +63,7 @@ export const authService = {
   },
 
   setSession(tokens: { access_token: string; refresh_token?: string }, user?: UserProfile) {
+    generation++;
     sessionStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
 
     if (user) {
@@ -70,9 +73,10 @@ export const authService = {
   },
 
   clearSession() {
+    generation++;
     sessionStorage.removeItem(ACCESS_TOKEN_KEY);
-    localStorage.removeItem("geopilot_refresh_token");
-    sessionStorage.removeItem("bgeo_project_id");
+    localStorage.removeItem('geopilot_refresh_token');
+    sessionStorage.removeItem('bgeo_project_id');
     sessionStorage.removeItem(USER_KEY);
     this.notify(null);
   },
@@ -107,14 +111,26 @@ export const authService = {
 
   async refreshToken(): Promise<string> {
     if (refreshInFlight) return refreshInFlight;
+    const version = generation;
     refreshInFlight = (async () => {
-      const res = await fetch('/api/v1/auth/refresh', { method: 'POST', credentials: 'same-origin' });
-      if (!res.ok) { if (res.status === 401) this.clearSession(); throw new Error('刷新登录失败，请重新登录'); }
+      const res = await fetch('/api/v1/auth/refresh', {
+        method: 'POST',
+        credentials: 'same-origin',
+      });
+      if (!res.ok) {
+        if (res.status === 401 && generation === version) this.clearSession();
+        throw new Error('刷新登录失败，请重新登录');
+      }
       const data: RefreshResponse = await res.json();
+      if (generation !== version) throw new Error('会话已变更，请重新登录');
       sessionStorage.setItem(ACCESS_TOKEN_KEY, data.access_token);
       return data.access_token;
     })();
-    try { return await refreshInFlight; } finally { refreshInFlight = null; }
+    try {
+      return await refreshInFlight;
+    } finally {
+      refreshInFlight = null;
+    }
   },
 
   async logout(): Promise<void> {
@@ -143,7 +159,12 @@ export const authService = {
         Authorization: `Bearer ${accessToken}`,
       },
     });
-    if (res.status === 401) { const token = await this.refreshToken(); res = await fetch('/api/v1/auth/me', {headers:{Authorization:`Bearer ${token}`}}); }
+    if (res.status === 401) {
+      const token = await this.refreshToken();
+      res = await fetch('/api/v1/auth/me', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    }
     if (!res.ok) {
       throw new Error('Failed to fetch user profile');
     }
@@ -170,6 +191,10 @@ export const authService = {
     }
 
     const updated: UserProfile = await res.json();
+    if (payload.new_password) {
+      this.clearSession();
+      return updated;
+    }
     sessionStorage.setItem(USER_KEY, JSON.stringify(updated));
     this.notify(updated);
     return updated;

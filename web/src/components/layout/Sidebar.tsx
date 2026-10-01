@@ -30,7 +30,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
     >
       <div className="brand">
         <div className="brand-mark" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="white" strokeLinecap="round" strokeLinejoin="round">
+          <svg
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="white"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <path d="M16.5 7.5A7.5 7.5 0 1 0 19 13" />
             <path d="m15.5 4.5 4 3-4 3" />
             <circle cx="11.5" cy="12" r="2.2" />
@@ -67,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <path d="M3 12h4l2.2-6 4.1 12 2.2-6H21" />
             <path d="M5 21h14" />
           </svg>
-          监测中心 <span className="badge">6</span>
+          监测中心
         </NavLink>
 
         <NavLink
@@ -79,7 +85,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <circle cx="11" cy="11" r="7" />
             <path d="m16 16 5 5M8 11h6M11 8v6" />
           </svg>
-          机会诊断 <span className="badge hot">12</span>
+          机会诊断
         </NavLink>
 
         <NavLink
@@ -140,7 +146,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <path d="M20 7a8 8 0 1 0 1 8" />
             <path d="M9 12h6M12 9v6" />
           </svg>
-          自进化中心 <span className="badge">5</span>
+          自进化中心
         </NavLink>
       </nav>
 
@@ -158,6 +164,21 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <circle cx="12" cy="12" r="2" fill="currentColor" stroke="none" />
           </svg>
           运营副驾驶
+        </NavLink>
+
+        <NavLink
+          to="/copilot/logs"
+          className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+          onClick={onClose}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+            <polyline points="14 2 14 8 20 8" />
+            <line x1="16" y1="13" x2="8" y2="13" />
+            <line x1="16" y1="17" x2="8" y2="17" />
+            <polyline points="10 9 9 9 8 9" />
+          </svg>
+          执行日志
         </NavLink>
 
         <NavLink
@@ -200,21 +221,8 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </nav>
 
       <div className="side-bottom">
-        <div className="usage">
-          <div className="usage-top">
-            <span>本月拨测额度</span>
-            <b>6,820 / 10k</b>
-          </div>
-          <div className="usage-bar">
-            <span></span>
-          </div>
-          <div className="usage-note">剩余 3,180 次 · 11 天后重置</div>
-        </div>
-
         <div
           className="profile"
-          onClick={onOpenProfile}
-          title={onOpenProfile ? "点击查看与编辑个人资料" : undefined}
           style={{
             display: 'flex',
             alignItems: 'center',
@@ -225,13 +233,30 @@ export const Sidebar: React.FC<SidebarProps> = ({
             transition: 'background-color 0.15s ease',
           }}
           onMouseEnter={(e) => {
-            if (onOpenProfile) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(0, 0, 0, 0.04)';
+            if (onOpenProfile)
+              (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(0, 0, 0, 0.04)';
           }}
           onMouseLeave={(e) => {
             (e.currentTarget as HTMLElement).style.backgroundColor = 'transparent';
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+          <button
+            type="button"
+            onClick={onOpenProfile}
+            disabled={!onOpenProfile}
+            title="查看与编辑个人资料"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              minWidth: 0,
+              flex: 1,
+              background: 'transparent',
+              border: 0,
+              textAlign: 'left',
+              padding: 0,
+            }}
+          >
             {currentUser?.avatar ? (
               <img
                 src={currentUser.avatar}
@@ -261,18 +286,39 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   flexShrink: 0,
                 }}
               >
-                {currentUser?.avatar_letter || (currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'B')}
+                {currentUser?.avatar_letter ||
+                  (currentUser?.name ? currentUser.name.charAt(0).toUpperCase() : 'B')}
               </div>
             )}
             <div className="profile-copy" style={{ minWidth: 0, flex: 1 }}>
-              <b style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <b
+                style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
                 {currentUser?.name || 'Bgeo'}
               </b>
-              <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {currentUser?.team || '增长团队'} · {currentUser?.role === 'admin' ? '管理员' : '运营人员'}
+              <span
+                style={{
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                }}
+              >
+                {currentUser?.team || '未设置团队'} ·{' '}
+                {{
+                  admin: '管理员',
+                  owner: '所有者',
+                  reviewer: '审核员',
+                  editor: '编辑员',
+                  operator: '运营人员',
+                  viewer: '只读成员',
+                }[currentUser?.role || ''] || '成员'}
               </span>
             </div>
-          </div>
+          </button>
           {onLogout && (
             <button
               onClick={(e) => {
@@ -281,7 +327,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
               }}
               className="btn ghost small"
               title="退出登录"
-              style={{ padding: '3px 7px', fontSize: '11px', color: '#94a3b8', flexShrink: 0 }}
+              style={{
+                padding: '3px 7px',
+                fontSize: '11px',
+                color: '#94a3b8',
+                flexShrink: 0,
+              }}
             >
               退出
             </button>

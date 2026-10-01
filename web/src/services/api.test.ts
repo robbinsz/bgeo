@@ -1,9 +1,96 @@
-import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
-import {authService} from './auth';import {request,setProjectID,streamSSE} from './api';
-beforeEach(()=>{sessionStorage.clear();authService.setSession({access_token:'access'}, {id:'u',email:'u@example.com',name:'U',role:'owner'});setProjectID('authorized-project')});afterEach(()=>vi.unstubAllGlobals());
-describe('request integrity',()=>{
- it('uses selected project and rejects server failures',async()=>{const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({error:'real failure'}),{status:503}));vi.stubGlobal('fetch',fetch);await expect(request('/monitor/runs',{method:'POST'})).rejects.toThrow('real failure');expect(fetch.mock.calls[0][1].headers['X-Project-ID']).toBe('authorized-project');expect(fetch).toHaveBeenCalledTimes(1)});
- it('coalesces concurrent token refresh and stores no refresh secret in browser storage',async()=>{const fetch=vi.fn().mockResolvedValue(new Response(JSON.stringify({access_token:'rotated'}),{status:200}));vi.stubGlobal('fetch',fetch);const values=await Promise.all([authService.refreshToken(),authService.refreshToken()]);expect(values).toEqual(['rotated','rotated']);expect(fetch).toHaveBeenCalledTimes(1);expect(fetch.mock.calls[0][1].credentials).toBe('same-origin');expect(localStorage.getItem('geopilot_refresh_token')).toBeNull()});
- it('surfaces SSE error instead of treating HTTP 200 as successful execution',async()=>{vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response('event: error\ndata: {"error":"approval expired"}\n\n',{status:200})));const onDone=vi.fn();const onError=vi.fn();await expect(streamSSE('/copilot/resume',{}, {onDone,onError})).rejects.toThrow('approval expired');expect(onDone).not.toHaveBeenCalled();expect(onError).toHaveBeenCalledOnce()});
- it('rejects truncated streams and accepts queued terminal events',async()=>{const fetch=vi.fn().mockResolvedValueOnce(new Response('event: message_chunk\ndata: {"chunk":"partial"}\n\n')).mockResolvedValueOnce(new Response('event: done\ndata: {"status":"queued"}\n\n'));vi.stubGlobal('fetch',fetch);await expect(streamSSE('/copilot/chat',{},{})).rejects.toThrow('提前中断');const done=vi.fn();await streamSSE('/copilot/resume',{}, {onDone:done});expect(done).toHaveBeenCalledWith({status:'queued'})});
+import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
+import { authService } from './auth';
+import { request, setProjectID, streamSSE } from './api';
+beforeEach(() => {
+  sessionStorage.clear();
+  authService.setSession(
+    { access_token: 'access' },
+    { id: 'u', email: 'u@example.com', name: 'U', role: 'owner' },
+  );
+  setProjectID('authorized-project');
+});
+afterEach(() => vi.unstubAllGlobals());
+describe('request integrity', () => {
+  it('does not resurrect a logged-out session when refresh completes later', async () => {
+    let respond!: (response: Response) => void;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockReturnValue(
+        new Promise<Response>((resolve) => {
+          respond = resolve;
+        }),
+      ),
+    );
+    const refresh = authService.refreshToken();
+    const rejected = expect(refresh).rejects.toThrow('会话已变更');
+    authService.clearSession();
+    respond(new Response(JSON.stringify({ access_token: 'obsolete' })));
+    await rejected;
+    expect(authService.getAccessToken()).toBeNull();
+  });
+  it('accepts CRLF and multiline SSE data without losing terminal state', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('event: done\r\ndata: {"status":\r\ndata: "queued"}\r\n\r\n'),
+        ),
+    );
+    const done = vi.fn();
+    await streamSSE('/copilot/resume', {}, { onDone: done });
+    expect(done).toHaveBeenCalledWith({ status: 'queued' });
+  });
+  it('uses selected project and rejects server failures', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ error: 'real failure' }), {
+        status: 503,
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    await expect(request('/monitor/runs', { method: 'POST' })).rejects.toThrow('real failure');
+    expect(fetch.mock.calls[0][1].headers['X-Project-ID']).toBe('authorized-project');
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+  it('coalesces concurrent token refresh and stores no refresh secret in browser storage', async () => {
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ access_token: 'rotated' }), {
+        status: 200,
+      }),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const values = await Promise.all([authService.refreshToken(), authService.refreshToken()]);
+    expect(values).toEqual(['rotated', 'rotated']);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch.mock.calls[0][1].credentials).toBe('same-origin');
+    expect(localStorage.getItem('geopilot_refresh_token')).toBeNull();
+  });
+  it('surfaces SSE error instead of treating HTTP 200 as successful execution', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi
+        .fn()
+        .mockResolvedValue(
+          new Response('event: error\ndata: {"error":"approval expired"}\n\n', { status: 200 }),
+        ),
+    );
+    const onDone = vi.fn();
+    const onError = vi.fn();
+    await expect(streamSSE('/copilot/resume', {}, { onDone, onError })).rejects.toThrow(
+      'approval expired',
+    );
+    expect(onDone).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledOnce();
+  });
+  it('rejects truncated streams and accepts queued terminal events', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('event: message_chunk\ndata: {"chunk":"partial"}\n\n'))
+      .mockResolvedValueOnce(new Response('event: done\ndata: {"status":"queued"}\n\n'));
+    vi.stubGlobal('fetch', fetch);
+    await expect(streamSSE('/copilot/chat', {}, {})).rejects.toThrow('提前中断');
+    const done = vi.fn();
+    await streamSSE('/copilot/resume', {}, { onDone: done });
+    expect(done).toHaveBeenCalledWith({ status: 'queued' });
+  });
 });

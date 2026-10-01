@@ -20,7 +20,7 @@ import type { AgentExecutionStep } from '../../types';
 interface ThoughtChainCardProps {
   steps?: AgentExecutionStep[];
   activeTool?: string | null;
-  activeToolArgs?: any;
+  activeToolArgs?: unknown;
   isRunning?: boolean;
   defaultExpanded?: boolean;
 }
@@ -49,7 +49,7 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
   const displaySteps: AgentExecutionStep[] = [...steps];
   if (isRunning && activeTool) {
     const existingIndex = displaySteps.findIndex(
-      (s) => s.step_type === 'tool_execution' && s.title === activeTool && s.status === 'pending'
+      (s) => s.step_type === 'tool_execution' && s.title === activeTool && s.status === 'pending',
     );
     if (existingIndex === -1) {
       displaySteps.push({
@@ -58,7 +58,7 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
         title: activeTool,
         description: `正在调用工具 ${TOOL_NAME_MAP[activeTool] || activeTool}...`,
         duration_ms: 0,
-        timestamp: new Date().toISOString(),
+        timestamp: '',
         status: 'pending',
         details: activeToolArgs ? { arguments: activeToolArgs } : undefined,
       });
@@ -156,8 +156,8 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
           isRunning
             ? 'bg-purple-50/80 text-purple-900 border border-purple-200/80 shadow-xs'
             : isExpanded
-            ? 'bg-slate-100 text-slate-800 border border-slate-200/90'
-            : 'bg-slate-50/90 hover:bg-slate-100/80 text-slate-600 hover:text-slate-900 border border-slate-200/70'
+              ? 'bg-slate-100 text-slate-800 border border-slate-200/90'
+              : 'bg-slate-50/90 hover:bg-slate-100/80 text-slate-600 hover:text-slate-900 border border-slate-200/70'
         }`}
       >
         <span className="flex items-center gap-1.5">
@@ -173,7 +173,12 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
           <span className="text-[11px] font-medium tracking-tight">
             {isRunning ? (
               activeTool ? (
-                <>正在调用工具：<span className="font-semibold text-purple-950">{TOOL_NAME_MAP[activeTool] || activeTool}</span></>
+                <>
+                  正在调用工具：
+                  <span className="font-semibold text-purple-950">
+                    {TOOL_NAME_MAP[activeTool] || activeTool}
+                  </span>
+                </>
               ) : (
                 '思考中 · 检索事实库并规划动作...'
               )
@@ -181,7 +186,8 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
               <>
                 已深度思考并调用工具{' '}
                 <span className="text-slate-400 font-mono text-[10px]">
-                  ({stepCount} 个步骤{toolSteps.length > 0 ? ` · ${toolSteps.length} 次工具` : ''})
+                  ({stepCount} 个步骤
+                  {toolSteps.length > 0 ? ` · ${toolSteps.length} 次工具` : ''})
                 </span>
               </>
             )}
@@ -189,7 +195,11 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
         </span>
 
         <span className="text-slate-400 group-hover:text-slate-600 transition-colors ml-1">
-          {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+          {isExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5" />
+          )}
         </span>
       </button>
 
@@ -209,12 +219,7 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() =>
-                  handleCopy(
-                    JSON.stringify(displaySteps, null, 2),
-                    'copy_all_steps'
-                  )
-                }
+                onClick={() => handleCopy(JSON.stringify(displaySteps, null, 2), 'copy_all_steps')}
                 className="inline-flex items-center gap-1 text-[10px] text-slate-500 hover:text-slate-800 transition"
                 title="复制完整思维链 JSON"
               >
@@ -238,9 +243,7 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
             {displaySteps.map((step, idx) => {
               const isTool = step.step_type === 'tool_execution';
               const isDetailsOpen = !!expandedDetails[step.step_id || String(idx)];
-              const friendlyTitle = isTool
-                ? TOOL_NAME_MAP[step.title] || step.title
-                : step.title;
+              const friendlyTitle = isTool ? TOOL_NAME_MAP[step.title] || step.title : step.title;
 
               return (
                 <div key={step.step_id || idx} className="relative group">
@@ -251,10 +254,10 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
                         step.status === 'success'
                           ? 'bg-emerald-500'
                           : step.status === 'pending'
-                          ? 'bg-sky-500 animate-ping'
-                          : step.status === 'pending_confirmation'
-                          ? 'bg-amber-500'
-                          : 'bg-slate-400'
+                            ? 'bg-sky-500 animate-ping'
+                            : step.status === 'pending_confirmation'
+                              ? 'bg-amber-500'
+                              : 'bg-slate-400'
                       }`}
                     />
                   </span>
@@ -320,7 +323,7 @@ export const ThoughtChainCard: React.FC<ThoughtChainCardProps> = ({
                               onClick={() =>
                                 handleCopy(
                                   JSON.stringify(step.details, null, 2),
-                                  `detail_${step.step_id || idx}`
+                                  `detail_${step.step_id || idx}`,
                                 )
                               }
                               className="absolute right-2 top-2 rounded bg-slate-800 p-1 text-slate-400 hover:text-white"

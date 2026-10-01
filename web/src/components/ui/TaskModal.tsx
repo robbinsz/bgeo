@@ -1,5 +1,95 @@
-import {useEffect,useRef,useState} from 'react';
-interface Props{isOpen:boolean;title:string;kind:'monitor'|'strategy'|'content';onClose:()=>void;onSubmit:(title:string,body:string)=>Promise<void>;}
-export function TaskModal({isOpen,title,kind,onClose,onSubmit}:Props){const [topic,setTopic]=useState('');const [body,setBody]=useState('');const [busy,setBusy]=useState(false);const [error,setError]=useState('');const input=useRef<HTMLInputElement>(null);useEffect(()=>{if(isOpen){const previous=document.activeElement as HTMLElement;input.current?.focus();return()=>previous?.focus()}},[isOpen]);if(!isOpen)return null;
- return <div className="modal-backdrop open" role="dialog" aria-modal="true" aria-labelledby="modalTitle" onKeyDown={e=>{if(e.key==='Escape'&&!busy)onClose()}}><form className="modal" onSubmit={async e=>{e.preventDefault();if(busy)return;setBusy(true);setError('');try{await onSubmit(topic,body);onClose()}catch(e){setError(e instanceof Error?e.message:'保存失败')}finally{setBusy(false)}}}><div className="modal-head"><h3 id="modalTitle">{title}</h3><button type="button" className="close" disabled={busy} onClick={onClose} aria-label="关闭">×</button></div><div className="modal-body"><label htmlFor="taskTitle">{kind==='monitor'?'目标问题':'名称'}</label><input id="taskTitle" ref={input} required maxLength={255} value={topic} onChange={e=>setTopic(e.target.value)}/>{kind==='content'&&<><label htmlFor="taskBody">内容正文</label><textarea id="taskBody" required value={body} onChange={e=>setBody(e.target.value)}/><p>请使用已批准的事实，保存后会进行核验。</p></>}{error&&<p role="alert">{error}</p>}</div><div className="modal-foot"><button type="button" className="btn" disabled={busy} onClick={onClose}>取消</button><button className="btn primary" disabled={busy}>{busy?'正在保存…':'保存'}</button></div></form></div>
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { useRef, useState } from 'react';
+interface Props {
+  isOpen: boolean;
+  title: string;
+  kind: 'monitor' | 'strategy' | 'content';
+  onClose: () => void;
+  onSubmit: (title: string, body: string) => Promise<void>;
+}
+export function TaskModal({ isOpen, title, kind, onClose, onSubmit }: Props) {
+  const [topic, setTopic] = useState('');
+  const [body, setBody] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const input = useRef<HTMLInputElement>(null);
+  const dialog = useRef<HTMLDivElement>(null);
+  useDialogFocus(dialog, isOpen, onClose, busy);
+  if (!isOpen) return null;
+  return (
+    <div
+      ref={dialog}
+      tabIndex={-1}
+      className="modal-backdrop open"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modalTitle"
+      onKeyDown={(e) => {
+        if (e.key === 'Escape' && !busy) onClose();
+      }}
+    >
+      <form
+        className="modal"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          if (busy) return;
+          setBusy(true);
+          setError('');
+          try {
+            await onSubmit(topic, body);
+            onClose();
+          } catch (e) {
+            setError(e instanceof Error ? e.message : '保存失败');
+          } finally {
+            setBusy(false);
+          }
+        }}
+      >
+        <div className="modal-head">
+          <h3 id="modalTitle">{title}</h3>
+          <button
+            type="button"
+            className="close"
+            disabled={busy}
+            onClick={onClose}
+            aria-label="关闭"
+          >
+            ×
+          </button>
+        </div>
+        <div className="modal-body">
+          <label htmlFor="taskTitle">{kind === 'monitor' ? '目标问题' : '名称'}</label>
+          <input
+            id="taskTitle"
+            ref={input}
+            required
+            maxLength={255}
+            value={topic}
+            onChange={(e) => setTopic(e.target.value)}
+          />
+          {kind === 'content' && (
+            <>
+              <label htmlFor="taskBody">内容正文</label>
+              <textarea
+                id="taskBody"
+                required
+                value={body}
+                onChange={(e) => setBody(e.target.value)}
+              />
+              <p>请使用已批准的事实，保存后会进行核验。</p>
+            </>
+          )}
+          {error && <p role="alert">{error}</p>}
+        </div>
+        <div className="modal-foot">
+          <button type="button" className="btn" disabled={busy} onClick={onClose}>
+            取消
+          </button>
+          <button className="btn primary" disabled={busy}>
+            {busy ? '正在保存…' : '保存'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
 }

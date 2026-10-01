@@ -1,10 +1,14 @@
-import {useState,useEffect,useCallback,useRef,type ReactNode} from 'react';
-export function useResource<T>(loader:()=>Promise<T>,pollMs=0){
- const [data,setData]=useState<T|null>(null);const [error,setError]=useState('');const [loading,setLoading]=useState(true);const active=useRef(true);const sequence=useRef(0);
- const reload=useCallback(async()=>{const seq=++sequence.current;try{const result=await loader();if(active.current&&seq===sequence.current){setData(result);setError('')}}catch(e){if(active.current&&seq===sequence.current)setError(e instanceof Error?e.message:'读取失败')}finally{if(active.current&&seq===sequence.current)setLoading(false)}},[loader]);
- useEffect(()=>{active.current=true;void reload();const refresh=()=>void reload();window.addEventListener('bgeo:updated',refresh);const timer=pollMs?setInterval(refresh,pollMs):undefined;return()=>{active.current=false;sequence.current++;clearInterval(timer);window.removeEventListener('bgeo:updated',refresh)}},[reload,pollMs]);return {data,error,loading,reload};
-}
-export function ResourceState({resource,empty=false,emptyMessage="暂无数据"}:{resource:{loading:boolean;error:string;reload:()=>Promise<void>};empty?:boolean;emptyMessage?:string}){
+import type { ReactNode } from 'react';
+import type { ItemPage } from '../../services/api';
+export function ResourceState({
+  resource,
+  empty = false,
+  emptyMessage = '暂无数据',
+}: {
+  resource: { loading: boolean; error: string; reload: () => Promise<void> };
+  empty?: boolean;
+  emptyMessage?: string;
+}) {
   if (resource.loading) {
     return (
       <div className="resource-loading" role="status">
@@ -20,7 +24,9 @@ export function ResourceState({resource,empty=false,emptyMessage="暂无数据"}
           <strong>数据读取失败</strong>
           <p>{resource.error}</p>
         </div>
-        <button className="btn small" onClick={()=>void resource.reload()}>重试</button>
+        <button className="btn small" onClick={() => void resource.reload()}>
+          重试
+        </button>
       </div>
     );
   }
@@ -34,9 +40,23 @@ export function ResourceState({resource,empty=false,emptyMessage="暂无数据"}
   }
   return null;
 }
-export function Page({id,className,title,description,actions,children}:{id?:string;className?:string;title:string;description:string;actions?:ReactNode;children:ReactNode}){
+export function Page({
+  id,
+  className,
+  title,
+  description,
+  actions,
+  children,
+}: {
+  id?: string;
+  className?: string;
+  title: string;
+  description: string;
+  actions?: ReactNode;
+  children: ReactNode;
+}) {
   return (
-    <section id={id} className={`view active ${className||''}`}>
+    <section id={id} className={`view active ${className || ''}`}>
       <div className="page-head">
         <div className="page-title">
           <h1>{title}</h1>
@@ -48,4 +68,51 @@ export function Page({id,className,title,description,actions,children}:{id?:stri
     </section>
   );
 }
-export function useAction(notify:(title:string,note?:string)=>void){const [busy,setBusy]=useState(false);const [error,setError]=useState('');const run=async(action:()=>Promise<unknown>,success:string)=>{if(busy)return false;setBusy(true);setError('');try{await action();notify(success);window.dispatchEvent(new Event('bgeo:updated'));return true}catch(e){const message=e instanceof Error?e.message:'操作失败';setError(message);notify('操作失败',message);return false}finally{setBusy(false)}};return{busy,error,run}}
+export function Stats({ items }: { items: { label: string; value: ReactNode; note?: string }[] }) {
+  return (
+    <div className="stats stats-4">
+      {items.map((item) => (
+        <article className="card stat" key={item.label}>
+          <div className="stat-top">{item.label}</div>
+          <div className="stat-value">{item.value}</div>
+          {item.note && <div className="stat-foot">{item.note}</div>}
+        </article>
+      ))}
+    </div>
+  );
+}
+export function Pagination({
+  resource,
+}: {
+  resource: {
+    data: ItemPage<unknown> | null;
+    offset: number;
+    setOffset: (value: number) => void;
+    loading: boolean;
+  };
+}) {
+  const page = resource.data?.pagination;
+  if (!page) return null;
+  return (
+    <nav className="toolbar" aria-label="列表分页">
+      <button
+        className="btn"
+        disabled={resource.loading || resource.offset === 0}
+        onClick={() => resource.setOffset(Math.max(0, resource.offset - page.limit))}
+      >
+        上一页
+      </button>
+      <span>
+        第 {Math.floor(resource.offset / page.limit) + 1} 页 · 本页{' '}
+        {resource.data?.items.length ?? 0} 项
+      </span>
+      <button
+        className="btn"
+        disabled={resource.loading || !page.has_more}
+        onClick={() => resource.setOffset(resource.offset + page.limit)}
+      >
+        下一页
+      </button>
+    </nav>
+  );
+}

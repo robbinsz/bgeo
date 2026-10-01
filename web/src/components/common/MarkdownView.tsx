@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
-import { marked, type Tokens } from 'marked';
+import { Marked, Renderer, type Tokens } from 'marked';
+import DOMPurify from 'dompurify';
 import { useStreamingText } from '../../hooks/useStreamingText';
 
 interface MarkdownViewProps {
@@ -10,9 +11,21 @@ interface MarkdownViewProps {
 }
 
 // Custom renderer for Claude-style code blocks with header and copy button
-const renderer = new marked.Renderer();
+const escapeHTML = (value: string) =>
+  value.replace(
+    /[&<>"']/g,
+    (char) =>
+      ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;',
+      })[char]!,
+  );
+const renderer = new Renderer();
 renderer.code = function (token: Tokens.Code): string {
-  const lang = token.lang || 'code';
+  const lang = escapeHTML((token.lang || 'code').split(/\s/)[0]);
   const text = token.text || '';
   const escaped = text
     .replace(/&/g, '&amp;')
@@ -24,7 +37,7 @@ renderer.code = function (token: Tokens.Code): string {
   return `<div class="code-block-wrapper">
     <div class="code-block-header">
       <span class="code-lang">${lang}</span>
-      <button type="button" class="copy-code-btn" data-copy-code="${encodeURIComponent(text)}" title="复制代码">
+      <button type="button" class="copy-code-btn" data-copy-code="${escapeHTML(encodeURIComponent(text))}" title="复制代码">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
         <span>复制代码</span>
       </button>
@@ -33,7 +46,7 @@ renderer.code = function (token: Tokens.Code): string {
   </div>`;
 };
 
-marked.use({ renderer, gfm: true, breaks: true });
+const markdown = new Marked({ renderer, gfm: true, breaks: true });
 
 export const MarkdownView: React.FC<MarkdownViewProps> = ({
   content,
@@ -46,9 +59,11 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
   const html = useMemo(() => {
     if (!displayedText) return '';
     try {
-      return marked.parse(displayedText) as string;
+      return DOMPurify.sanitize(markdown.parse(displayedText) as string, {
+        USE_PROFILES: { html: true },
+      });
     } catch {
-      return displayedText;
+      return escapeHTML(displayedText);
     }
   }, [displayedText]);
 
@@ -59,26 +74,23 @@ export const MarkdownView: React.FC<MarkdownViewProps> = ({
       e.stopPropagation();
       const code = btn.getAttribute('data-copy-code');
       if (code) {
-        navigator.clipboard.writeText(decodeURIComponent(code));
-        const originalHtml = btn.innerHTML;
-        btn.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#34d399" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg><span style="color:#34d399">已复制</span>`;
-        setTimeout(() => {
-          btn.innerHTML = originalHtml;
-        }, 1800);
+        void navigator.clipboard
+          ?.writeText(decodeURIComponent(code))
+          .then(() => {
+            btn.setAttribute('title', '已复制');
+            const label = btn.querySelector('span');
+            if (label) label.textContent = '已复制';
+          })
+          .catch(() => {
+            btn.setAttribute('title', '复制失败，请手动选择代码');
+          });
       }
     }
   };
 
   return (
-    <div
-      className={`markdown-body ${className}`}
-      style={style}
-      onClick={handleContainerClick}
-    >
-      <div
-        className="markdown-content"
-        dangerouslySetInnerHTML={{ __html: html }}
-      />
+    <div className={`markdown-body ${className}`} style={style} onClick={handleContainerClick}>
+      <div className="markdown-content" dangerouslySetInnerHTML={{ __html: html }} />
       {isStreaming && (
         <span className="streaming-cursor" aria-hidden="true">
           ▌

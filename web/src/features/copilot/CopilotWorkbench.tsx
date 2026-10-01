@@ -1,12 +1,12 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { usePermissions } from '../../hooks/permissions';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+import { useResource } from '../../hooks/useResource';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Bot,
   User,
   ArrowUp,
-  PlusCircle,
-  Trash2,
-  Pencil,
   Check,
   Loader2,
   BarChart3,
@@ -15,30 +15,24 @@ import {
   Clock,
   Sliders,
   SendHorizontal,
-  ChevronRight,
-  ChevronLeft,
   Cpu,
-  Plug,
-  Brain,
   Zap,
-  Settings,
-  CheckSquare,
-  Square,
-  Circle,
-  CheckCircle2,
   Activity,
   RefreshCw,
   X,
   ExternalLink,
   Copy,
 } from 'lucide-react';
-import type { CopilotSession, CopilotMessage, CopilotActionPreview, AgentExecutionTrace } from '../../types';
-import { api, streamSSE } from '../../services/api';
+
+import type { CopilotActionPreview, AgentExecutionTrace } from '../../types';
+import { api, type MCPServer } from '../../services/api';
+import { useCopilotSession } from '../../hooks/useCopilotSession';
 import { CopilotActionCard } from '../../components/copilot/CopilotActionCard';
 import { ThoughtChainCard } from '../../components/copilot/ThoughtChainCard';
 import { AgentTraceTimeline } from './AgentTraceTimeline';
 import { MarkdownView } from '../../components/common/MarkdownView';
-import { groupSessionsByDate } from '../../utils/sessionGrouping';
+import { SessionSidebar } from './SessionSidebar';
+import { HarnessPanel } from './HarnessPanel';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -52,14 +46,6 @@ const SUGGESTIONS = [
   { icon: SendHorizontal, text: '发布一条关于透明收费的答复内容' },
 ];
 
-const BUILTIN_SKILLS = [
-  { id: 'monitor', label: '监测拨测巡检', desc: '监测、拨测、定时任务', risk: 'safe' },
-  { id: 'diagnosis', label: '机会差距诊断', desc: '竞品归因、落差分析', risk: 'safe' },
-  { id: 'content', label: '事实核验创作', desc: '内容生成、质检评分', risk: 'safe' },
-  { id: 'publish', label: '渠道发布与分发', desc: '高危 · 需人工审批', risk: 'high' },
-  { id: 'evolution', label: '自进化策略反思', desc: '经验切片、偏好记录', risk: 'safe' },
-];
-
 const ACTIVE_TOOL_LABELS: Record<string, string> = {
   run_monitor_batch: '正在并发执行全量关键词监测拨测...',
   get_geo_overview_and_gaps: '正在检索最新 GEO 提及率与落后机会数据...',
@@ -67,591 +53,30 @@ const ACTIVE_TOOL_LABELS: Record<string, string> = {
   get_schedule_status: '正在读取定时任务调度与执行历史...',
 };
 
-const WELCOME_CONTENT = `你好，我是 **GeoPilot 运营副驾驶**。
-
-我已接入后台全链路治理体系，可协同你完成以下任务：
-• **效果诊断与竞品归因**：实时查询品牌在主流 AI 问答平台中的提及率、推荐率与落后机会
-• **任务编排与定时管理**：即时启动全量关键词拨测批次，或按需调整每日自动化定时调度计划
-• **内容生成与安全质检**：基于企业事实库与透明计价条款，针对落后机会自动撰写针对性优化答复
-• **渠道发布与风控审批**：对外部渠道发布与关键配置变更执行安全确认闸门，经人工审批后方可生效
-
-请在下方输入你的工作指令，或直接选择预置操作建议。`;
-
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
-
-/** 左栏：会话列表 (支持分组与重命名/删除) */
-interface SessionSidebarProps {
-  sessions: CopilotSession[];
-  currentSessionId: string | null;
-  onSelect: (id: string) => void;
-  onNew: () => void;
-  onDelete: (e: React.MouseEvent, id: string) => void;
-  onRename: (id: string, newTitle: string) => void;
-}
-
-const SessionSidebar: React.FC<SessionSidebarProps> = ({
-  sessions,
-  currentSessionId,
-  onSelect,
-  onNew,
-  onDelete,
-  onRename,
-}) => {
-  const [editingId, setEditingId] = useState<string | null>(null);
-  const [editingTitle, setEditingTitle] = useState('');
-  const [hoveredId, setHoveredId] = useState<string | null>(null);
-
-  const groups = useMemo(() => groupSessionsByDate(sessions), [sessions]);
-
-  const startEditing = (e: React.MouseEvent, s: CopilotSession) => {
-    e.stopPropagation();
-    setEditingId(s.id);
-    setEditingTitle(s.title);
-  };
-
-  const cancelEditing = (e?: React.MouseEvent) => {
-    e?.stopPropagation();
-    setEditingId(null);
-    setEditingTitle('');
-  };
-
-  const submitEditing = (e?: React.MouseEvent | React.FormEvent, id?: string) => {
-    e?.stopPropagation();
-    if (!editingId) return;
-    const targetId = id || editingId;
-    if (editingTitle.trim()) {
-      onRename(targetId, editingTitle.trim());
-    }
-    setEditingId(null);
-    setEditingTitle('');
-  };
-
-  return (
-    <div
-      style={{
-        width: '230px',
-        flexShrink: 0,
-        borderRight: '1px solid rgba(226, 232, 240, 0.8)',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#f8fafc',
-        height: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          height: '52px',
-          padding: '0 14px',
-          borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-          boxSizing: 'border-box',
-        }}
-      >
-        <span
-          style={{
-            fontSize: '12px',
-            fontWeight: 650,
-            color: '#475467',
-            letterSpacing: '0.02em',
-          }}
-        >
-          会话历史
-        </span>
-        <button
-          type="button"
-          onClick={onNew}
-          title="新建会话"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            padding: '4px 9px',
-            borderRadius: '6px',
-            background: '#0f172a',
-            color: '#f8fafc',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '11px',
-            fontWeight: 550,
-            transition: 'background 0.15s ease',
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.background = '#1e293b')}
-          onMouseLeave={(e) => (e.currentTarget.style.background = '#0f172a')}
-        >
-          <PlusCircle size={13} />
-          新建
-        </button>
-      </div>
-
-      {/* Session list grouped */}
-      <div style={{ flex: 1, overflowY: 'auto', padding: '8px 8px' }}>
-        {groups.length === 0 ? (
-          <div style={{ padding: '36px 0', textAlign: 'center', fontSize: '12px', color: '#94a3b8' }}>
-            暂无历史会话
-          </div>
-        ) : (
-          groups.map((group) => (
-            <div key={group.label} style={{ marginBottom: '12px' }}>
-              <div
-                style={{
-                  fontSize: '11px',
-                  fontWeight: 650,
-                  color: '#94a3b8',
-                  padding: '6px 8px 4px',
-                  letterSpacing: '0.04em',
-                }}
-              >
-                {group.label}
-              </div>
-
-              {group.items.map((s) => {
-                const isSelected = currentSessionId === s.id;
-                const isHovered = hoveredId === s.id;
-                const isEditing = editingId === s.id;
-
-                return (
-                  <div
-                    key={s.id}
-                    onClick={() => {
-                      if (!isEditing) onSelect(s.id);
-                    }}
-                    onMouseEnter={() => setHoveredId(s.id)}
-                    onMouseLeave={() => setHoveredId(null)}
-                    style={{
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'space-between',
-                      padding: '8px 10px',
-                      borderRadius: '8px',
-                      cursor: isEditing ? 'default' : 'pointer',
-                      marginBottom: '2px',
-                      background: isSelected ? '#e2e8f0' : isHovered ? '#f1f5f9' : 'transparent',
-                      border: 'none',
-                      boxShadow: 'none',
-                      transition: 'background 0.12s ease',
-                    }}
-                  >
-                    {isEditing ? (
-                      <div
-                        style={{ display: 'flex', alignItems: 'center', width: '100%', gap: '4px' }}
-                        onClick={(e) => e.stopPropagation()}
-                      >
-                        <input
-                          autoFocus
-                          type="text"
-                          value={editingTitle}
-                          onChange={(e) => setEditingTitle(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') submitEditing(e, s.id);
-                            if (e.key === 'Escape') cancelEditing();
-                          }}
-                          style={{
-                            flex: 1,
-                            minWidth: 0,
-                            padding: '3px 6px',
-                            fontSize: '12px',
-                            borderRadius: '4px',
-                            border: '1px solid #3b82f6',
-                            outline: 'none',
-                            background: '#fff',
-                            color: '#1e293b',
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={(e) => submitEditing(e, s.id)}
-                          title="保存"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#10b981',
-                            padding: '2px',
-                            display: 'flex',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <Check size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          onClick={(e) => cancelEditing(e)}
-                          title="取消"
-                          style={{
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#94a3b8',
-                            padding: '2px',
-                            display: 'flex',
-                            alignItems: 'center',
-                          }}
-                        >
-                          <X size={13} />
-                        </button>
-                      </div>
-                    ) : (
-                      <>
-                        <div style={{ minWidth: 0, flex: 1, marginRight: '6px' }}>
-                          <div
-                            style={{
-                              fontSize: '12px',
-                              fontWeight: isSelected ? 600 : 500,
-                              color: isSelected ? '#0f172a' : '#334155',
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                              whiteSpace: 'nowrap',
-                            }}
-                            title={s.title}
-                          >
-                            {s.title}
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '10px',
-                              color: '#94a3b8',
-                              marginTop: '2px',
-                              fontFamily: 'ui-monospace,monospace',
-                            }}
-                          >
-                            {new Date(s.last_active_at || s.created_at).toLocaleString('zh-CN', {
-                              month: 'numeric',
-                              day: 'numeric',
-                              hour: '2-digit',
-                              minute: '2-digit',
-                            })}
-                          </div>
-                        </div>
-
-                        {/* Actions: Rename & Delete */}
-                        <div
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '2px',
-                            opacity: isHovered || isSelected ? 1 : 0,
-                            transition: 'opacity 0.15s ease',
-                          }}
-                          onClick={(e) => e.stopPropagation()}
-                        >
-                          <button
-                            type="button"
-                            onClick={(e) => startEditing(e, s)}
-                            title="重命名会话"
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '4px',
-                              borderRadius: '4px',
-                              color: '#64748b',
-                              display: 'flex',
-                              alignItems: 'center',
-                              transition: 'color 0.12s, background 0.12s',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.color = '#2563eb';
-                              e.currentTarget.style.background = '#e0e7ff';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.color = '#64748b';
-                              e.currentTarget.style.background = 'none';
-                            }}
-                          >
-                            <Pencil size={12} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => onDelete(e, s.id)}
-                            title="删除会话"
-                            style={{
-                              background: 'none',
-                              border: 'none',
-                              cursor: 'pointer',
-                              padding: '4px',
-                              borderRadius: '4px',
-                              color: '#64748b',
-                              display: 'flex',
-                              alignItems: 'center',
-                              transition: 'color 0.12s, background 0.12s',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.color = '#e11d48';
-                              e.currentTarget.style.background = '#ffe4e6';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.color = '#64748b';
-                              e.currentTarget.style.background = 'none';
-                            }}
-                          >
-                            <Trash2 size={12} />
-                          </button>
-                        </div>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          ))
-        )}
-      </div>
-    </div>
-  );
-};
-
-/** 右栏：Harness 运行面板 */
-const HarnessPanel: React.FC<{
-  enabledSkills: string[];
-  onToggleSkill: (id: string) => void;
-  onOpenConfig: () => void;
-  mcpServers: any[];
-  memoryHints: string[];
-}> = ({ enabledSkills, onToggleSkill, onOpenConfig, mcpServers, memoryHints }) => {
-  const [collapsed, setCollapsed] = useState(false);
-
-  if (collapsed) {
-    return (
-      <div
-        style={{
-          width: '36px',
-          flexShrink: 0,
-          borderLeft: '1px solid rgba(226, 232, 240, 0.8)',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          paddingTop: '12px',
-          background: '#f8fafc',
-          gap: '16px',
-          height: '100%',
-        }}
-      >
-        <button
-          type="button"
-          onClick={() => setCollapsed(false)}
-          title="展开 Harness 面板"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#64748b', padding: '4px' }}
-        >
-          <ChevronLeft size={14} />
-        </button>
-        <Zap size={13} color="#64748b" />
-        <Cpu size={13} color="#64748b" />
-        <Plug size={13} color="#64748b" />
-        <Brain size={13} color="#64748b" />
-      </div>
-    );
-  }
-
-  return (
-    <div
-      style={{
-        width: '240px',
-        flexShrink: 0,
-        borderLeft: '1px solid rgba(226, 232, 240, 0.8)',
-        display: 'flex',
-        flexDirection: 'column',
-        background: '#f8fafc',
-        height: '100%',
-        overflow: 'hidden',
-      }}
-    >
-      {/* Header */}
-      <div
-        style={{
-          height: '52px',
-          padding: '0 14px',
-          borderBottom: '1px solid rgba(226, 232, 240, 0.8)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          flexShrink: 0,
-          boxSizing: 'border-box',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-          <Zap size={13} color="#f59e0b" />
-          <span style={{ fontSize: '11px', fontWeight: 600, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-            Harness
-          </span>
-        </div>
-        <button
-          type="button"
-          onClick={() => setCollapsed(true)}
-          title="收起面板"
-          style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#94a3b8', padding: '2px' }}
-        >
-          <ChevronRight size={14} />
-        </button>
-      </div>
-
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '12px 12px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-        {/* Skills */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px' }}>
-            <Cpu size={11} color="#475569" />
-            <span style={{ fontSize: '10px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              挂载技能
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {BUILTIN_SKILLS.map((skill) => {
-              const enabled = enabledSkills.includes(skill.id);
-              return (
-                <button
-                  key={skill.id}
-                  type="button"
-                  onClick={() => onToggleSkill(skill.id)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'flex-start',
-                    gap: '7px',
-                    padding: '7px 8px',
-                    borderRadius: '7px',
-                    background: enabled ? '#fff' : 'transparent',
-                    border: enabled ? '1px solid #e2e8f0' : '1px solid transparent',
-                    cursor: 'pointer',
-                    textAlign: 'left',
-                    boxShadow: enabled ? '0 1px 2px rgba(0,0,0,0.04)' : 'none',
-                    transition: 'background 0.1s, border-color 0.1s',
-                  }}
-                >
-                  {enabled
-                    ? <CheckSquare size={13} color="#0f172a" style={{ marginTop: '1px', flexShrink: 0 }} />
-                    : <Square size={13} color="#94a3b8" style={{ marginTop: '1px', flexShrink: 0 }} />
-                  }
-                  <div>
-                    <div style={{ fontSize: '11px', fontWeight: 500, color: enabled ? '#0f172a' : '#64748b' }}>
-                      {skill.label}
-                    </div>
-                    <div style={{ fontSize: '10px', color: skill.risk === 'high' ? '#ef4444' : '#94a3b8', marginTop: '1px' }}>
-                      {skill.desc}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* MCP Servers */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px' }}>
-            <Plug size={11} color="#475569" />
-            <span style={{ fontSize: '10px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              MCP 服务连接
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {mcpServers.map((srv) => (
-              <div
-                key={srv.id}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: '7px',
-                  padding: '6px 8px',
-                  borderRadius: '7px',
-                  background: '#fff',
-                  border: '1px solid #f1f5f9',
-                }}
-              >
-                <Circle
-                  size={7}
-                  fill={srv.is_active ? '#10b981' : '#d1d5db'}
-                  color={srv.is_active ? '#10b981' : '#d1d5db'}
-                  style={{ flexShrink: 0 }}
-                />
-                <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: '11px', fontWeight: 500, color: '#334155', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {srv.name}
-                  </div>
-                  <div style={{ fontSize: '9px', color: '#94a3b8', fontFamily: 'ui-monospace,monospace' }}>
-                    {srv.transport_type} · {srv.is_active ? '已配置（需测试连接）' : '未启用'}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Memory hints */}
-        <section>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginBottom: '8px' }}>
-            <Brain size={11} color="#475569" />
-            <span style={{ fontSize: '10px', fontWeight: 600, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              记忆命中
-            </span>
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-            {memoryHints.map((hint, i) => (
-              <div
-                key={i}
-                style={{
-                  display: 'flex',
-                  alignItems: 'flex-start',
-                  gap: '6px',
-                  padding: '6px 8px',
-                  borderRadius: '7px',
-                  background: '#fff',
-                  border: '1px solid #f1f5f9',
-                }}
-              >
-                <CheckCircle2 size={10} color="#10b981" style={{ marginTop: '2px', flexShrink: 0 }} />
-                <span style={{ fontSize: '10px', color: '#475569', lineHeight: 1.5 }}>{hint}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-
-        {/* Config button */}
-        <button
-          type="button"
-          onClick={onOpenConfig}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: '6px',
-            padding: '8px',
-            borderRadius: '8px',
-            background: '#0f172a',
-            color: '#f8fafc',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '11px',
-            fontWeight: 500,
-            marginTop: 'auto',
-          }}
-        >
-          <Settings size={12} />
-          完整 Harness 配置
-        </button>
-      </div>
-    </div>
-  );
-};
-
 // ---------------------------------------------------------------------------
 // Main Component
 // ---------------------------------------------------------------------------
 export const CopilotWorkbench: React.FC = () => {
   const navigate = useNavigate();
-  const [sessions, setSessions] = useState<CopilotSession[]>([]);
-  const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
-  const [messages, setMessages] = useState<CopilotMessage[]>([]);
-  const [input, setInput] = useState('');
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [requestError, setRequestError] = useState('');
-  useEffect(()=>{if(!currentSessionId)return;const timer=setInterval(()=>{if(!isStreaming&&messages.some(m=>m.card_status==='queued'))void loadSessionDetails(currentSessionId)},3000);return()=>clearInterval(timer)},[currentSessionId,isStreaming,messages]);
-  const [activeTool, setActiveTool] = useState<string | null>(null);
-  const [activeToolArgs, setActiveToolArgs] = useState<any>(null);
+  const permissions = usePermissions();
+  const {
+    sessions,
+    currentSessionId,
+    messages,
+    input,
+    setInput,
+    isStreaming,
+    requestError,
+    activeTool,
+    activeToolArgs,
+    startNewSession,
+    loadSessionDetails,
+    handleSend,
+    handleDeleteSession,
+    handleRenameSession,
+    handleConfirmAction,
+    handleCancelAction,
+  } = useCopilotSession(true, { current_route: '/copilot' });
   const [copiedMsgId, setCopiedMsgId] = useState<string | null>(null);
 
   const handleCopyMessage = (content: string, id: string) => {
@@ -659,19 +84,39 @@ export const CopilotWorkbench: React.FC = () => {
     setCopiedMsgId(id);
     setTimeout(() => setCopiedMsgId(null), 1800);
   };
-  const [enabledSkills, setEnabledSkills] = useState<string[]>(
-    ['monitor', 'diagnosis', 'content', 'evolution']
-  );
-  const [selectedModel,setSelectedModel]=useState('');
-  const [mcpServers,setMCPServers]=useState<any[]>([]);
-  const [memoryHints,setMemoryHints]=useState<string[]>([]);
-  const [configError,setConfigError]=useState('');
-
+  const aiResource = useResource(api.getAIConfig),
+    harnessResource = useResource(api.getHarnessConfig),
+    serverResource = useResource(api.getMCPServers),
+    memoryResource = useResource(api.getMemoryEntries);
+  const [skillsDraft, setEnabledSkills] = useState<string[] | null>(null);
+  let savedSkills: string[] = [];
+  try {
+    const value: unknown = JSON.parse(harnessResource.data?.enabled_skills ?? '[]');
+    if (Array.isArray(value))
+      savedSkills = value.filter((item): item is string => typeof item === 'string');
+  } catch {
+    /* invalid server configuration is shown through its error */
+  }
+  const enabledSkills = skillsDraft ?? savedSkills;
+  const selectedModel = aiResource.data?.model_name ?? '';
+  const mcpServers: MCPServer[] = serverResource.data?.items ?? [];
+  const memoryHints = (memoryResource.data?.items ?? [])
+    .filter((m) => m.status === 'approved' && m.memory_type !== 'brand_truth')
+    .map((m) => m.title);
+  const [saveConfigError, setConfigError] = useState('');
+  const configError =
+    saveConfigError ||
+    aiResource.error ||
+    harnessResource.error ||
+    serverResource.error ||
+    memoryResource.error;
 
   // Agent Trace Modal
   const [activeTrace, setActiveTrace] = useState<AgentExecutionTrace | null>(null);
   const [loadingTrace, setLoadingTrace] = useState(false);
   const [showTraceModal, setShowTraceModal] = useState(false);
+  const traceDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(traceDialogRef, showTraceModal, () => setShowTraceModal(false));
 
   const handleOpenTrace = async (traceId?: string) => {
     setLoadingTrace(true);
@@ -701,277 +146,26 @@ export const CopilotWorkbench: React.FC = () => {
   const scrollToBottom = () => messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
 
   useEffect(() => {
-    loadSessions();
-    loadModelConfig();
-    setTimeout(() => inputRef.current?.focus(), 100);
+    const timer = setTimeout(() => inputRef.current?.focus(), 100);
+    return () => clearTimeout(timer);
   }, []);
-
-  const loadModelConfig=async()=>{try{const [ai,harness,servers,memories]=await Promise.all([api.getAIConfig(),api.getHarnessConfig(),api.getMCPServers(),api.getMemoryEntries()]);setSelectedModel(ai.model_name);setEnabledSkills(JSON.parse(harness.enabled_skills));setMCPServers(servers.items);setMemoryHints(memories.items.filter(m=>m.status==='approved'&&m.memory_type!=='brand_truth').map(m=>m.title));setConfigError('')}catch(e){setConfigError(e instanceof Error?e.message:'读取配置失败')}};
 
   useEffect(() => {
     scrollToBottom();
   }, [messages, isStreaming, activeTool]);
 
-  // --- Session management ---
-  async function loadSessions() {
+  const handleToggleSkill = async (skillId: string) => {
+    const next = enabledSkills.includes(skillId)
+      ? enabledSkills.filter((s) => s !== skillId)
+      : [...enabledSkills, skillId];
     try {
-      const res = await api.getCopilotSessions();
-      setSessions(res.items || []);
-      if (!currentSessionId && res.items && res.items.length > 0) {
-        loadSessionDetails(res.items[0].id);
-      } else if (!currentSessionId) {
-        startNewSession();
-      }
-    } catch {
-      startNewSession();
-    }
-  };
-
-  async function loadSessionDetails(sessionId: string) {
-    try {
-      setCurrentSessionId(sessionId);
-      const res = await api.getCopilotSession(sessionId);
-      const traceMap: Record<string, any[]> = {};
-      if (res.traces) {
-        for (const t of res.traces) {
-          try {
-            if (t.timeline_json) traceMap[t.id] = JSON.parse(t.timeline_json);
-          } catch {
-            // ignore
-          }
-        }
-      }
-      const msgs = (res.messages || []).map((m) => {
-        if (m.trace_id && traceMap[m.trace_id]) {
-          return { ...m, steps: traceMap[m.trace_id] };
-        }
-        return m;
+      await api.updateHarnessConfig({
+        enabled_skills: JSON.stringify(next),
       });
-      setMessages(msgs);
-    } catch {
-      setMessages([]);
-    }
-  };
-
-  const startNewSession = () => {
-    setCurrentSessionId(null);
-    setMessages([
-      {
-        id: 'welcome',
-        session_id: '',
-        role: 'assistant',
-        content: WELCOME_CONTENT,
-        created_at: new Date().toISOString(),
-      },
-    ]);
-  };
-
-  const handleDeleteSession = async (e: React.MouseEvent, sessionId: string) => {
-    e.stopPropagation();
-    if (!window.confirm('确定要删除此会话记录吗？')) return;
-    try {
-      await api.deleteCopilotSession(sessionId);
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
-      if (currentSessionId === sessionId) startNewSession();
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleRenameSession = async (sessionId: string, newTitle: string) => {
-    const trimmed = newTitle.trim();
-    if (!trimmed) return;
-    try {
-      await api.renameCopilotSession(sessionId, trimmed);
-      setSessions((prev) =>
-        prev.map((s) => (s.id === sessionId ? { ...s, title: trimmed } : s))
-      );
-    } catch {
-      // ignore
-    }
-  };
-
-  const handleToggleSkill=async(skillId:string)=>{const next=enabledSkills.includes(skillId)?enabledSkills.filter(s=>s!==skillId):[...enabledSkills,skillId];try{await api.updateHarnessConfig({enabled_skills:JSON.stringify(next)});setEnabledSkills(next);setConfigError('')}catch(e){setConfigError(e instanceof Error?e.message:'配置保存失败')}};
-
-  // --- Chat ---
-  const handleSend = async (textToSend?: string) => {
-    const text = (textToSend || input).trim();
-    if (!text || isStreaming) return;
-
-    setInput('');
-    setRequestError('');
-    setIsStreaming(true);
-    setActiveTool(null);
-
-    const tempUserMsg: CopilotMessage = {
-      id: `user_${Date.now()}`,
-      session_id: currentSessionId || '',
-      role: 'user',
-      content: text,
-      created_at: new Date().toISOString(),
-    };
-    const tempAsstMsg: CopilotMessage = {
-      id: `asst_${Date.now()}`,
-      session_id: currentSessionId || '',
-      role: 'assistant',
-      content: '',
-      created_at: new Date().toISOString(),
-    };
-
-    setMessages((prev) => [...prev, tempUserMsg, tempAsstMsg]);
-
-    let fullContent = '';
-
-    try {
-      await streamSSE(
-        '/copilot/chat',
-        {
-          session_id: currentSessionId || undefined,
-          message: text,
-          context: { current_route: '/copilot', enabled_skills: enabledSkills },
-        },
-        {
-          onChunk: (chunk: string) => {
-            fullContent += chunk;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') last.content = fullContent;
-              return updated;
-            });
-          },
-          onToolStart: (tool: string, args: any) => {
-            setActiveTool(tool);
-            setActiveToolArgs(args);
-          },
-          onToolDone: (_tool: string) => {
-            setActiveTool(null);
-            setActiveToolArgs(null);
-          },
-          onInterrupt: (preview: CopilotActionPreview) => {
-            setActiveTool(null);
-            setActiveToolArgs(null);
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') {
-                last.card_type = preview.card_type;
-                last.card_payload = JSON.stringify(preview);
-                last.card_status = 'pending';
-              }
-              return updated;
-            });
-          },
-          onDone: (data: any) => {
-            if (data.session_id) {
-              setCurrentSessionId(data.session_id);
-              loadSessions();
-            }
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') {
-                if (data.trace_id) last.trace_id = data.trace_id;
-                if (data.steps) last.steps = data.steps;
-              }
-              return updated;
-            });
-            setIsStreaming(false);
-            setActiveTool(null);
-            setActiveToolArgs(null);
-          },
-          onError: (error) => {
-            setRequestError(error.message);
-            setIsStreaming(false);
-            setActiveTool(null);
-            setActiveToolArgs(null);
-          },
-        }
-      );
-    } catch (error) {
-      setRequestError(error instanceof Error ? error.message : '请求失败，请重试');
-      setIsStreaming(false);
-      setActiveTool(null);
-    }
-  };
-
-  const handleConfirmAction = async (interruptId: string) => {
-    if (!currentSessionId) return;
-    setIsStreaming(true);
-
-    let fullContent = '';
-    const tempAsstMsg: CopilotMessage = {
-      id: `asst_confirm_${Date.now()}`,
-      session_id: currentSessionId,
-      role: 'assistant',
-      content: '',
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, tempAsstMsg]);
-
-    try {
-      await streamSSE(
-        '/copilot/resume',
-        { session_id: currentSessionId, interrupt_id: interruptId, action: 'confirm' },
-        {
-          onChunk: (chunk: string) => {
-            fullContent += chunk;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') last.content = fullContent;
-              return updated;
-            });
-          },
-          onDone: () => {
-            setIsStreaming(false);
-            loadSessionDetails(currentSessionId);
-          },
-          onError: (error) => { setRequestError(error.message); setIsStreaming(false); },
-        }
-      );
-    } catch(e) {
-      setIsStreaming(false);throw e;
-    }
-  };
-
-  const handleCancelAction = async (interruptId: string) => {
-    if (!currentSessionId) return;
-    setIsStreaming(true);
-
-    let fullContent = '';
-    const tempAsstMsg: CopilotMessage = {
-      id: `asst_cancel_${Date.now()}`,
-      session_id: currentSessionId,
-      role: 'assistant',
-      content: '',
-      created_at: new Date().toISOString(),
-    };
-    setMessages((prev) => [...prev, tempAsstMsg]);
-
-    try {
-      await streamSSE(
-        '/copilot/resume',
-        { session_id: currentSessionId, interrupt_id: interruptId, action: 'cancel' },
-        {
-          onChunk: (chunk: string) => {
-            fullContent += chunk;
-            setMessages((prev) => {
-              const updated = [...prev];
-              const last = updated[updated.length - 1];
-              if (last && last.role === 'assistant') last.content = fullContent;
-              return updated;
-            });
-          },
-          onDone: () => {
-            setIsStreaming(false);
-            loadSessionDetails(currentSessionId);
-          },
-          onError: (error) => { setRequestError(error.message); setIsStreaming(false); },
-        }
-      );
-    } catch(e) {
-      setIsStreaming(false);throw e;
+      setEnabledSkills(next);
+      setConfigError('');
+    } catch (e) {
+      setConfigError(e instanceof Error ? e.message : '配置保存失败');
     }
   };
 
@@ -999,9 +193,39 @@ export const CopilotWorkbench: React.FC = () => {
       />
 
       {/* ── 中栏：对话主区 ─────────────────────────────── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden', height: '100%' }}>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          minWidth: 0,
+          overflow: 'hidden',
+          height: '100%',
+        }}
+      >
+        <div className="copilot-mobile-tools">
+          <button className="btn small" onClick={startNewSession}>
+            新会话
+          </button>
+          <select
+            className="select"
+            aria-label="副驾驶会话"
+            value={currentSessionId ?? ''}
+            onChange={(e) =>
+              e.target.value ? void loadSessionDetails(e.target.value) : startNewSession()
+            }
+          >
+            <option value="">新会话</option>
+            {sessions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.title}
+              </option>
+            ))}
+          </select>
+        </div>
         {/* Workbench top bar */}
         <div
+          className="copilot-workbench-header"
           style={{
             height: '52px',
             display: 'flex',
@@ -1014,7 +238,13 @@ export const CopilotWorkbench: React.FC = () => {
             boxSizing: 'border-box',
           }}
         >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+            }}
+          >
             <span
               style={{
                 display: 'flex',
@@ -1029,8 +259,22 @@ export const CopilotWorkbench: React.FC = () => {
               <Bot size={15} color="#34d399" />
             </span>
             <div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{ fontSize: '13px', fontWeight: 600, color: '#0f172a' }}>GeoPilot 运营副驾驶</span>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '8px',
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: '13px',
+                    fontWeight: 600,
+                    color: '#0f172a',
+                  }}
+                >
+                  GeoPilot 运营副驾驶
+                </span>
                 <span
                   style={{
                     fontSize: '10px',
@@ -1045,19 +289,44 @@ export const CopilotWorkbench: React.FC = () => {
                   LangGraph · HiL
                 </span>
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '5px', marginTop: '1px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '5px',
+                  marginTop: '1px',
+                }}
+              >
                 <span
-                  style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981', display: 'inline-block' }}
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    background: '#10b981',
+                    display: 'inline-block',
+                  }}
                 />
-                <span style={{ fontSize: '11px', color: '#64748b' }}>
-                  {enabledSkills.length} 个技能已挂载 · {mcpServers.filter(s=>s.is_active).length} 个 MCP 已配置
+                <span
+                  style={{
+                    fontSize: '11px',
+                    color: '#64748b',
+                  }}
+                >
+                  {enabledSkills.length} 个技能已挂载 ·{' '}
+                  {mcpServers.filter((s) => s.is_active).length} 个 MCP 已配置
                 </span>
               </div>
             </div>
           </div>
 
           {/* Right Header Actions: Model Switcher & Harness Quick Access */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
             <div
               style={{
                 display: 'flex',
@@ -1070,12 +339,12 @@ export const CopilotWorkbench: React.FC = () => {
               }}
             >
               <Cpu size={12} color="#64748b" />
-<span style={{ fontSize: '11px', color: '#64748b' }}>模型:</span>
-<span>{selectedModel||'未读取配置'}</span>
+              <span style={{ fontSize: '11px', color: '#64748b' }}>模型:</span>
+              <span>{selectedModel || '未读取配置'}</span>
             </div>
 
-            {configError&&<span role="alert">{configError}</span>}
-            {requestError&&<span role="alert">{requestError}</span>}
+            {configError && <span role="alert">{configError}</span>}
+            {requestError && <span role="alert">{requestError}</span>}
             <button
               type="button"
               onClick={() => navigate('/copilot/harness')}
@@ -1119,12 +388,30 @@ export const CopilotWorkbench: React.FC = () => {
             const isCurrentStreaming = isStreaming && !isUser && index === messages.length - 1;
             let previewData: CopilotActionPreview | null = null;
             if (m.card_payload) {
-              try { previewData = JSON.parse(m.card_payload); } catch { /* ignore */ }
+              try {
+                previewData = JSON.parse(m.card_payload);
+              } catch {
+                /* ignore */
+              }
             }
 
             return (
-              <div key={m.id} style={{ display: 'flex', flexDirection: 'column', alignItems: isUser ? 'flex-end' : 'flex-start' }}>
-                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '10px', maxWidth: '90%' }}>
+              <div
+                key={m.id}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: isUser ? 'flex-end' : 'flex-start',
+                }}
+              >
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'flex-start',
+                    gap: '10px',
+                    maxWidth: '90%',
+                  }}
+                >
                   {!isUser && (
                     <span
                       style={{
@@ -1143,9 +430,21 @@ export const CopilotWorkbench: React.FC = () => {
                     </span>
                   )}
 
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                    }}
+                  >
                     {!isUser && (
-                      <span style={{ fontSize: '11px', fontWeight: 500, color: '#64748b', marginBottom: '4px' }}>
+                      <span
+                        style={{
+                          fontSize: '11px',
+                          fontWeight: 500,
+                          color: '#64748b',
+                          marginBottom: '4px',
+                        }}
+                      >
                         GeoPilot 运营副驾驶
                       </span>
                     )}
@@ -1167,7 +466,11 @@ export const CopilotWorkbench: React.FC = () => {
                           fontSize: '12px',
                           lineHeight: 1.7,
                           ...(isUser
-                            ? { background: '#0f172a', color: '#f8fafc', boxShadow: '0 1px 3px rgba(0,0,0,0.12)' }
+                            ? {
+                                background: '#0f172a',
+                                color: '#f8fafc',
+                                boxShadow: '0 1px 3px rgba(0,0,0,0.12)',
+                              }
                             : {
                                 background: '#fff',
                                 color: '#1e293b',
@@ -1177,12 +480,15 @@ export const CopilotWorkbench: React.FC = () => {
                         }}
                       >
                         {isUser ? (
-                          <div style={{ whiteSpace: 'pre-wrap' }}>{m.content}</div>
+                          <div
+                            style={{
+                              whiteSpace: 'pre-wrap',
+                            }}
+                          >
+                            {m.content}
+                          </div>
                         ) : (
-                          <MarkdownView
-                            content={m.content}
-                            isStreaming={isCurrentStreaming}
-                          />
+                          <MarkdownView content={m.content} isStreaming={isCurrentStreaming} />
                         )}
 
                         {previewData && (
@@ -1212,7 +518,10 @@ export const CopilotWorkbench: React.FC = () => {
                           fontFamily: 'ui-monospace,monospace',
                         }}
                       >
-                        {new Date(m.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(m.created_at).toLocaleTimeString('zh-CN', {
+                          hour: '2-digit',
+                          minute: '2-digit',
+                        })}
                       </span>
 
                       {!isUser && m.content && (
@@ -1235,7 +544,11 @@ export const CopilotWorkbench: React.FC = () => {
                             }}
                             title="复制回答内容"
                           >
-                            {copiedMsgId === m.id ? <Check size={10} color="#10b981" /> : <Copy size={10} />}
+                            {copiedMsgId === m.id ? (
+                              <Check size={10} color="#10b981" />
+                            ) : (
+                              <Copy size={10} />
+                            )}
                             <span>{copiedMsgId === m.id ? '已复制' : '复制回答'}</span>
                           </button>
 
@@ -1348,7 +661,7 @@ export const CopilotWorkbench: React.FC = () => {
                   key={idx}
                   type="button"
                   onClick={() => handleSend(item.text)}
-                  disabled={isStreaming}
+                  disabled={isStreaming || !permissions.write}
                   style={{
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -1400,6 +713,7 @@ export const CopilotWorkbench: React.FC = () => {
             }}
           >
             <textarea
+              aria-label="运营指令"
               ref={inputRef}
               rows={2}
               value={input}
@@ -1411,7 +725,7 @@ export const CopilotWorkbench: React.FC = () => {
                 }
               }}
               placeholder={`输入运营指令（例如："查看 GEO 效果差距" 或 "发布优化草稿至知乎"）...`}
-              disabled={isStreaming}
+              disabled={isStreaming || !permissions.write}
               style={{
                 flex: 1,
                 resize: 'none',
@@ -1428,7 +742,7 @@ export const CopilotWorkbench: React.FC = () => {
             <button
               type="button"
               onClick={() => handleSend()}
-              disabled={!input.trim() || isStreaming}
+              disabled={!input.trim() || isStreaming || !permissions.write}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -1445,11 +759,7 @@ export const CopilotWorkbench: React.FC = () => {
               }}
               title="发送指令 (Enter)"
             >
-              {isStreaming ? (
-                <Loader2 size={14} className="animate-spin" />
-              ) : (
-                <ArrowUp size={15} />
-              )}
+              {isStreaming ? <Loader2 size={14} className="animate-spin" /> : <ArrowUp size={15} />}
             </button>
           </div>
         </div>
@@ -1480,6 +790,11 @@ export const CopilotWorkbench: React.FC = () => {
           onClick={() => setShowTraceModal(false)}
         >
           <div
+            ref={traceDialogRef}
+            role="dialog"
+            aria-modal="true"
+            aria-label="Agent 运行日志"
+            tabIndex={-1}
             style={{
               background: '#ffffff',
               borderRadius: 14,
@@ -1488,7 +803,8 @@ export const CopilotWorkbench: React.FC = () => {
               maxHeight: '88vh',
               display: 'flex',
               flexDirection: 'column',
-              boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+              boxShadow:
+                '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
               overflow: 'hidden',
             }}
             onClick={(e) => e.stopPropagation()}
@@ -1504,7 +820,13 @@ export const CopilotWorkbench: React.FC = () => {
                 background: '#f8fafc',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
                 <span
                   style={{
                     width: 28,
@@ -1520,16 +842,34 @@ export const CopilotWorkbench: React.FC = () => {
                   <Activity size={15} />
                 </span>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
+                  <h3
+                    style={{
+                      margin: 0,
+                      fontSize: 15,
+                      fontWeight: 700,
+                      color: '#0f172a',
+                    }}
+                  >
                     Agent 运行日志 (Execution Trace)
                   </h3>
-                  <span style={{ fontSize: 11, color: '#64748b' }}>
+                  <span
+                    style={{
+                      fontSize: 11,
+                      color: '#64748b',
+                    }}
+                  >
                     本轮对话的执行全流程，包含记忆检索、技能装配、模型推理与工具调用
                   </span>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8,
+                }}
+              >
                 <button
                   onClick={() => {
                     setShowTraceModal(false);
@@ -1553,6 +893,7 @@ export const CopilotWorkbench: React.FC = () => {
                 </button>
                 <button
                   onClick={() => setShowTraceModal(false)}
+                  aria-label="关闭运行日志"
                   style={{
                     background: 'transparent',
                     border: 'none',
@@ -1570,7 +911,14 @@ export const CopilotWorkbench: React.FC = () => {
             {/* Modal Body */}
             <div style={{ padding: 20, overflowY: 'auto', flex: 1 }}>
               {loadingTrace ? (
-                <div style={{ padding: 40, textAlign: 'center', color: '#64748b', fontSize: 13 }}>
+                <div
+                  style={{
+                    padding: 40,
+                    textAlign: 'center',
+                    color: '#64748b',
+                    fontSize: 13,
+                  }}
+                >
                   <RefreshCw size={18} className="animate-spin" style={{ marginBottom: 8 }} />
                   <div>正在加载执行时间线数据...</div>
                 </div>
@@ -1584,7 +932,14 @@ export const CopilotWorkbench: React.FC = () => {
                   }}
                 />
               ) : (
-                <div style={{ padding: 40, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                <div
+                  style={{
+                    padding: 40,
+                    textAlign: 'center',
+                    color: '#94a3b8',
+                    fontSize: 13,
+                  }}
+                >
                   暂未捕获到该条消息的运行日志记录
                 </div>
               )}

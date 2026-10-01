@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { useDialogFocus } from '../../hooks/useDialogFocus';
+const COPYRIGHT_YEAR = new Date().getFullYear();
 import {
   Radar,
   Sparkles,
@@ -15,7 +17,6 @@ import {
   Truck,
   ChevronDown,
   LayoutDashboard,
-  CheckCircle2,
   BarChart3,
   RefreshCw,
 } from 'lucide-react';
@@ -79,33 +80,14 @@ export const LandingView: React.FC<LandingViewProps> = ({
   isAuthenticated,
   onNavigateLogin,
   onNavigateConsole,
-  onShowToast,
 }) => {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [isAuditModalOpen, setIsAuditModalOpen] = useState(false);
-  const [auditSubmitted, setAuditSubmitted] = useState(false);
   const [activePromptIndex, setActivePromptIndex] = useState(0);
   const [openFaqIndex, setOpenFaqIndex] = useState<number | null>(0);
 
-  // Form State
-  const [formData, setFormData] = useState({
-    brandName: '',
-    industry: '智能制造 / 工业装备',
-    phone: '',
-    targetEngine: '全部主流大模型 (DeepSeek/豆包/元宝/Kimi)',
-  });
-
-  const handleAuditSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formData.brandName || !formData.phone) {
-      if (onShowToast) onShowToast('请完整填写', '请提供您的品牌名称与联系电话');
-      return;
-    }
-    setAuditSubmitted(true);
-    if (onShowToast) {
-      onShowToast('预约提交成功', '我们的 GEO 策略专家将在 2 小时内为您生成专属品牌 AI 可见度体检报告');
-    }
-  };
+  const auditDialogRef = useRef<HTMLDivElement>(null);
+  useDialogFocus(auditDialogRef, isAuditModalOpen, () => setIsAuditModalOpen(false));
 
   const handlePrimaryCta = () => {
     if (isAuthenticated && onNavigateConsole) {
@@ -117,6 +99,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
 
   return (
     <div className="min-h-screen bg-white text-gray-900 selection:bg-indigo-600 selection:text-white font-sans antialiased">
+      <p className="mt-16 bg-slate-100 text-slate-700 text-xs text-center px-4 py-2">产品展示中的品牌、回答与方案为样例。当前真实采样支持 Perplexity，内容和发布需人工审批，实际结果以项目记录为准。</p>
       {/* ============================================================ */}
       {/* 顶部导航栏 (Answerbit 极简通透风格) */}
       {/* ============================================================ */}
@@ -169,7 +152,6 @@ export const LandingView: React.FC<LandingViewProps> = ({
           <div className="flex items-center gap-3">
             <button
               onClick={() => {
-                setAuditSubmitted(false);
                 setIsAuditModalOpen(true);
               }}
               className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium text-gray-700 hover:text-indigo-600 hover:bg-indigo-50/60 transition cursor-pointer"
@@ -252,7 +234,6 @@ export const LandingView: React.FC<LandingViewProps> = ({
           <div className="mb-8 inline-flex items-center">
             <button
               onClick={() => {
-                setAuditSubmitted(false);
                 setIsAuditModalOpen(true);
               }}
               className="group inline-flex items-center gap-2 rounded-full border border-indigo-200/80 bg-indigo-50/80 px-4 py-1.5 text-xs sm:text-sm text-gray-700 hover:border-indigo-300 hover:shadow-sm transition-all cursor-pointer"
@@ -276,14 +257,13 @@ export const LandingView: React.FC<LandingViewProps> = ({
 
           {/* Subtitle */}
           <p className="max-w-2xl mx-auto text-base sm:text-lg text-gray-500 leading-relaxed mb-10">
-            主流大模型天级追踪，每日自动采集品牌提及与排名变化。依托真实事实核验与因果复测，让企业 GEO 增长可量化、可追溯。
+            主流大模型天级追踪，每日自动采集品牌提及与排名变化。依托已批准事实核验与配对复测，让企业 GEO 增长可量化、可追溯。
           </p>
 
           {/* Action Buttons */}
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 mb-14">
             <button
               onClick={() => {
-                setAuditSubmitted(false);
                 setIsAuditModalOpen(true);
               }}
               className="w-full sm:w-auto inline-flex items-center justify-center gap-2 rounded-full bg-gray-900 px-7 py-3 text-sm font-semibold text-white shadow-sm hover:bg-gray-800 hover:scale-[1.01] transition-all cursor-pointer"
@@ -543,7 +523,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-indigo-500 shrink-0" />
-                    <span>竞品截流波动自动告警推送</span>
+                    <span>查看品牌与竞品的真实回答证据</span>
                   </li>
                 </ul>
               </div>
@@ -592,7 +572,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 </div>
                 <h3 className="mb-2 text-lg font-bold text-gray-900">自主进化策略闭环</h3>
                 <p className="mb-4 text-xs sm:text-sm text-gray-500 leading-relaxed">
-                  针对未命中意图自动生成高权重事实内容资产，分发至模型偏好渠道，并在实施后自动进行因果复测验证。
+                  针对未命中意图自动生成高权重事实内容资产，分发至模型偏好渠道，并在实施后自动进行配对复测评估。
                 </p>
                 <ul className="space-y-2 text-xs sm:text-sm text-gray-600">
                   <li className="flex items-center gap-2">
@@ -636,7 +616,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-indigo-500 shrink-0" />
-                    <span>开放 API 与企业微信 / 飞书自动化告警</span>
+                    <span>项目 API 与持久任务状态查询</span>
                   </li>
                 </ul>
               </div>
@@ -824,8 +804,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </div>
               <button
                 onClick={() => {
-                  setAuditSubmitted(false);
-                  setIsAuditModalOpen(true);
+                    setIsAuditModalOpen(true);
                 }}
                 className="w-full py-2.5 rounded-full border border-gray-300 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50 transition cursor-pointer"
               >
@@ -848,7 +827,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
                 <ul className="space-y-3 text-xs sm:text-sm text-gray-600 mb-8">
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-indigo-600" />
-                    <span>5 大主流模型天级全自动巡检</span>
+                    <span>Perplexity 定时采样与任务记录</span>
                   </li>
                   <li className="flex items-center gap-2">
                     <Check className="w-4 h-4 text-indigo-600" />
@@ -906,8 +885,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
               </div>
               <button
                 onClick={() => {
-                  setAuditSubmitted(false);
-                  setIsAuditModalOpen(true);
+                    setIsAuditModalOpen(true);
                 }}
                 className="w-full py-2.5 rounded-full border border-gray-300 text-xs sm:text-sm font-semibold text-gray-700 hover:bg-gray-50 transition cursor-pointer"
               >
@@ -943,7 +921,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
               },
               {
                 q: '需要企业技术团队投入大量人手配合改造吗？',
-                a: '完全不需要。GeoPilot 提供完整的 SaaS 控制台与开箱即用的分发通道，日常仅需业务或市场人员提供企业真实资质、技术参数与客户案例事实，系统将全自动完成结构化封装、分发与天级监测。',
+                a: '完全不需要。GeoPilot 提供完整的 SaaS 控制台与可配置的 Webhook 分发通道，日常仅需业务或市场人员提供企业真实资质、技术参数与客户案例事实，配置 Perplexity 与 Webhook 渠道后可运行定时监测；内容与发布仍需人工审批。',
               },
               {
                 q: '项目管理控制台能提供哪些具体管理能力？',
@@ -997,7 +975,6 @@ export const LandingView: React.FC<LandingViewProps> = ({
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 pt-2">
             <button
               onClick={() => {
-                setAuditSubmitted(false);
                 setIsAuditModalOpen(true);
               }}
               className="w-full sm:w-auto px-8 py-3 rounded-full bg-indigo-600 text-white font-semibold text-sm hover:bg-indigo-500 shadow-md transition cursor-pointer"
@@ -1057,7 +1034,7 @@ export const LandingView: React.FC<LandingViewProps> = ({
           </div>
 
           <div className="text-center md:text-right">
-            <p>© {new Date().getFullYear()} GeoPilot (bgeo.cc). All rights reserved.</p>
+            <p>© {COPYRIGHT_YEAR} GeoPilot (bgeo.cc). All rights reserved.</p>
             <p className="text-[11px] text-gray-400 mt-1">企业级大模型搜索可见度自主运营平台</p>
           </div>
         </div>
@@ -1067,115 +1044,15 @@ export const LandingView: React.FC<LandingViewProps> = ({
       {/* 免费品牌体检预约弹窗 (Audit Modal) */}
       {/* ============================================================ */}
       {isAuditModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-fadeIn">
-          <div className="relative w-full max-w-lg rounded-2xl bg-white p-6 sm:p-8 shadow-2xl border border-gray-100">
-            <button
-              onClick={() => setIsAuditModalOpen(false)}
-              className="absolute right-5 top-5 p-1 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition cursor-pointer"
-              aria-label="关闭"
-            >
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <div ref={auditDialogRef} role="dialog" aria-modal="true" aria-labelledby="audit-title" tabIndex={-1} className="relative w-full max-w-lg rounded-2xl bg-white p-6 sm:p-8 shadow-2xl border border-gray-100">
+            <button onClick={() => setIsAuditModalOpen(false)} className="absolute right-5 top-5 p-1 rounded-lg text-gray-500 hover:bg-gray-100" aria-label="关闭">
               <X className="w-5 h-5" />
             </button>
-
-            {!auditSubmitted ? (
-              <>
-                <div className="mb-6">
-                  <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-semibold mb-2">
-                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-                    免费申请 AI 搜索可见度体检
-                  </div>
-                  <h3 className="text-xl font-bold text-gray-900">
-                    测测你的品牌在 DeepSeek / 豆包 中的排位
-                  </h3>
-                  <p className="text-xs text-gray-500 mt-1">
-                    提交企业信息，资深 GEO 顾问将在 2 小时内出具首份涵盖 10 组关键意图的体检报告。
-                  </p>
-                </div>
-
-                <form onSubmit={handleAuditSubmit} className="space-y-4">
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      企业或品牌全称 <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="例：东莞市精工机械科技有限公司"
-                      value={formData.brandName}
-                      onChange={(e) => setFormData({ ...formData, brandName: e.target.value })}
-                      className="w-full h-10 px-3 rounded-lg border border-gray-300 text-xs sm:text-sm text-gray-900 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">所属主营行业</label>
-                    <select
-                      value={formData.industry}
-                      onChange={(e) => setFormData({ ...formData, industry: e.target.value })}
-                      className="w-full h-10 px-3 rounded-lg border border-gray-300 text-xs sm:text-sm text-gray-900 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100 bg-white"
-                    >
-                      <option>智能制造 / 工业装备 / 零部件</option>
-                      <option>企业服务 / 财税法律 / 审计咨询</option>
-                      <option>建材家居 / 系统门窗 / 精工定制</option>
-                      <option>跨境物流 / 海外仓 / 供应链</option>
-                      <option>医疗健康 / 生物科技 / 医药器械</option>
-                      <option>其他垂直实体商业行业</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">
-                      联系人手机号或微信 (接收体检报告) <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="例：13800000000 或 微信号"
-                      value={formData.phone}
-                      onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                      className="w-full h-10 px-3 rounded-lg border border-gray-300 text-xs sm:text-sm text-gray-900 outline-none focus:border-indigo-600 focus:ring-2 focus:ring-indigo-100"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    className="w-full h-11 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700 transition shadow-sm cursor-pointer mt-2"
-                  >
-                    立即获取免费体检报告
-                  </button>
-                  <p className="text-[11px] text-gray-400 text-center">
-                    我们严格保护企业商业隐私，数据仅用于生成单次对比分析报告
-                  </p>
-                </form>
-              </>
-            ) : (
-              <div className="py-8 text-center space-y-4">
-                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center mx-auto">
-                  <CheckCircle2 className="w-8 h-8" />
-                </div>
-                <h3 className="text-xl font-bold text-gray-900">体检申请已成功提交！</h3>
-                <p className="text-xs sm:text-sm text-gray-500 max-w-sm mx-auto">
-                  感谢您的信任。GEO 策略专家已开始采集【{formData.brandName}】在各主流模型中的最新表现，并会通过【{formData.phone}】在 2 小时内与您交付报告。
-                </p>
-                <div className="pt-4 flex justify-center gap-3">
-                  <button
-                    onClick={() => setIsAuditModalOpen(false)}
-                    className="px-6 py-2 rounded-full border border-gray-300 text-xs font-semibold text-gray-700 hover:bg-gray-50 cursor-pointer"
-                  >
-                    完成
-                  </button>
-                  <button
-                    onClick={() => {
-                      setIsAuditModalOpen(false);
-                      handlePrimaryCta();
-                    }}
-                    className="px-6 py-2 rounded-full bg-gray-900 text-white text-xs font-semibold hover:bg-gray-800 cursor-pointer"
-                  >
-                    前往管理控制台
-                  </button>
-                </div>
-              </div>
-            )}
+            <h3 id="audit-title" className="text-xl font-bold text-gray-900 pr-8">通过项目监测查看品牌可见度</h3>
+            <p className="text-sm text-gray-600 mt-4">进入有权限的项目，配置模型与 Perplexity 采样凭证，添加目标问题后启动监测。批次页面会展示真实回答、失败状态与可用指标。</p>
+            <p className="text-xs text-gray-500 mt-3">当前真实采样连接器为 Perplexity。官网中的其他引擎回答和品牌展示为界面样例。</p>
+            <button onClick={() => { setIsAuditModalOpen(false); handlePrimaryCta(); }} className="w-full h-11 mt-6 rounded-full bg-indigo-600 text-white text-sm font-semibold hover:bg-indigo-700">进入项目监测</button>
           </div>
         </div>
       )}

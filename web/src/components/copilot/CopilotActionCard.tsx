@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ShieldCheck, XCircle, ArrowRight, ShieldAlert } from 'lucide-react';
 import type { CopilotActionPreview } from '../../types';
+import { PermissionButton } from '../ui/Permissions';
 
 interface CopilotActionCardProps {
   preview: CopilotActionPreview;
@@ -15,12 +16,36 @@ export const CopilotActionCard: React.FC<CopilotActionCardProps> = ({
   onConfirm,
   onCancel,
 }) => {
-  const [optimisticStatus,setCurrentStatus]=useState('pending');
- const currentStatus=initialStatus&&initialStatus!=='pending'?initialStatus:optimisticStatus;
-  const [isLoading,setIsLoading]=useState(false);const [error,setError]=useState('');
+  const [optimisticStatus, setCurrentStatus] = useState('pending');
+  const currentStatus =
+    initialStatus && initialStatus !== 'pending' ? initialStatus : optimisticStatus;
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handleConfirm=async()=>{setIsLoading(true);setError('');try{await onConfirm(preview.interrupt_id);setCurrentStatus('queued')}catch(e){setError(e instanceof Error?e.message:'审批受理失败')}finally{setIsLoading(false)}};
-  const handleCancel=async()=>{setIsLoading(true);setError('');try{await onCancel(preview.interrupt_id);setCurrentStatus('cancelled')}catch(e){setError(e instanceof Error?e.message:'取消失败')}finally{setIsLoading(false)}};
+  const handleConfirm = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await onConfirm(preview.interrupt_id);
+      setCurrentStatus('queued');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '审批受理失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  const handleCancel = async () => {
+    setIsLoading(true);
+    setError('');
+    try {
+      await onCancel(preview.interrupt_id);
+      setCurrentStatus('cancelled');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : '取消失败');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const isSchedule = preview.card_type === 'preview_schedule';
 
   return (
@@ -51,8 +76,8 @@ export const CopilotActionCard: React.FC<CopilotActionCardProps> = ({
                   {preview.details.frequency === 'hourly'
                     ? '每小时一次 (Hourly)'
                     : preview.details.frequency === 'weekly'
-                    ? '每周一次 (Weekly)'
-                    : '每日一次 (Daily)'}
+                      ? '每周一次 (Weekly)'
+                      : '每日一次 (Daily)'}
                 </span>
               </div>
               <div className="flex items-center justify-between">
@@ -68,7 +93,9 @@ export const CopilotActionCard: React.FC<CopilotActionCardProps> = ({
                 </div>
               )}
             </>
-          ) : preview.card_type==='preview_tool'?<pre className="whitespace-pre-wrap">{JSON.stringify(preview.details,null,2)}</pre> : (
+          ) : preview.card_type === 'preview_tool' ? (
+            <pre className="whitespace-pre-wrap">{JSON.stringify(preview.details, null, 2)}</pre>
+          ) : (
             <>
               <div className="flex items-center justify-between">
                 <span className="text-slate-400">目标渠道</span>
@@ -76,18 +103,25 @@ export const CopilotActionCard: React.FC<CopilotActionCardProps> = ({
               </div>
               <div className="flex items-start justify-between gap-3">
                 <span className="text-slate-400 shrink-0">发布标题</span>
-                <span className="font-medium text-right text-slate-800">{preview.details.title}</span>
+                <span className="font-medium text-right text-slate-800">
+                  {preview.details.title}
+                </span>
               </div>
             </>
           )}
         </div>
 
-        {error&&<p role="alert" className="text-red-700">{error}</p>}
+        {error && (
+          <p role="alert" className="text-red-700">
+            {error}
+          </p>
+        )}
         {/* Footer Actions or Result Badge */}
         <div className="mt-3.5 flex items-center justify-end">
           {currentStatus === 'pending' ? (
             <div className="flex items-center space-x-2">
-              <button
+              <PermissionButton
+                permission="review"
                 type="button"
                 disabled={isLoading}
                 onClick={handleCancel}
@@ -95,8 +129,9 @@ export const CopilotActionCard: React.FC<CopilotActionCardProps> = ({
               >
                 <XCircle className="h-3.5 w-3.5 text-slate-400" />
                 <span>取消</span>
-              </button>
-              <button
+              </PermissionButton>
+              <PermissionButton
+                permission="review"
                 type="button"
                 disabled={isLoading}
                 onClick={handleConfirm}
@@ -105,10 +140,23 @@ export const CopilotActionCard: React.FC<CopilotActionCardProps> = ({
                 <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
                 <span>{isLoading ? '正在记录审批…' : '确认并投递任务'}</span>
                 <ArrowRight className="h-3 w-3 opacity-60" />
-              </button>
+              </PermissionButton>
             </div>
-          ) : <div role="status" className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs">{{queued:'审批已记录，等待任务执行',completed:'执行已完成，请核对实际结果',failed:'执行失败，请查看任务与回执',cancelled:'审批已取消',expired:'审批已过期',outcome_unknown:'执行结果不确定，需核对回执'}[currentStatus]||currentStatus}</div>}
-
+          ) : (
+            <div
+              role="status"
+              className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs"
+            >
+              {{
+                queued: '审批已记录，等待任务执行',
+                completed: '执行已完成，请核对实际结果',
+                failed: '执行失败，请查看任务与回执',
+                cancelled: '审批已取消',
+                expired: '审批已过期',
+                outcome_unknown: '执行结果不确定，需核对回执',
+              }[currentStatus] || currentStatus}
+            </div>
+          )}
         </div>
       </div>
     </div>

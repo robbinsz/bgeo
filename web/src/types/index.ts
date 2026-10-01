@@ -10,6 +10,7 @@ export type ViewType =
   | 'sources'
   | 'settings'
   | 'copilot'
+  | 'copilot_logs'
   | 'harness';
 
 export interface ToastItem {
@@ -49,7 +50,14 @@ export interface CopilotMessage {
 
 export interface AgentExecutionStep {
   step_id: string;
-  step_type: 'memory_retrieval' | 'skill_assembly' | 'model_inference' | 'tool_execution' | 'post_session_hook' | 'user_approval';
+  step_type:
+    | 'memory_retrieval'
+    | 'skill_assembly'
+    | 'model_inference'
+    | 'tool_execution'
+    | 'post_session_hook'
+    | 'user_approval'
+    | 'mcp_invocation';
   title: string;
   description: string;
   duration_ms: number;
