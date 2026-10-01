@@ -1,6 +1,6 @@
 module github.com/robbinsz/bgeo
 
-go 1.26.0
+go 1.26.6
 
 require (
 	github.com/expr-lang/expr v1.17.8
@@ -46,7 +46,7 @@ require (
 	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
 	github.com/pkoukk/tiktoken-go v0.1.6 // indirect
 	github.com/quic-go/qpack v0.6.0 // indirect
-	github.com/quic-go/quic-go v0.59.0 // indirect
+	github.com/quic-go/quic-go v0.59.1 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect
 	github.com/tmc/langchaingo v0.1.14 // indirect

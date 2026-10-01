@@ -29,7 +29,7 @@ func (r *ProjectRepository) GetProject(ctx context.Context, id uuid.UUID) (*Proj
 
 func (r *ProjectRepository) ListBrandFacts(ctx context.Context, projectID uuid.UUID) ([]BrandFactModel, error) {
 	var facts []BrandFactModel
-	err := r.db.WithContext(ctx).Where("project_id = ? AND status = 'approved'", projectID).Order("created_at desc").Find(&facts).Error
+	err := r.db.WithContext(ctx).Where("project_id = ? AND status = 'approved'", projectID).Order("created_at desc").Scopes(PageScope(ctx)).Find(&facts).Error
 	return facts, err
 }
 
@@ -39,7 +39,7 @@ func (r *ProjectRepository) CreateBrandFact(ctx context.Context, fact *BrandFact
 
 func (r *ProjectRepository) ListCompetitors(ctx context.Context, projectID uuid.UUID) ([]CompetitorModel, error) {
 	var comps []CompetitorModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Find(&comps).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Scopes(PageScope(ctx)).Find(&comps).Error
 	return comps, err
 }
 
@@ -54,7 +54,7 @@ func NewMonitorRepository(db *gorm.DB) *MonitorRepository {
 
 func (r *MonitorRepository) ListQueries(ctx context.Context, projectID uuid.UUID) ([]QueryModel, error) {
 	var queries []QueryModel
-	err := r.db.WithContext(ctx).Where("project_id = ? AND status = 'active'", projectID).Order("created_at desc").Limit(10000).Find(&queries).Error
+	err := r.db.WithContext(ctx).Where("project_id = ? AND status = 'active'", projectID).Order("created_at desc").Limit(10000).Scopes(PageScope(ctx)).Find(&queries).Error
 	return queries, err
 }
 
@@ -72,7 +72,7 @@ func (r *MonitorRepository) SaveSnapshot(ctx context.Context, snap *AnswerSnapsh
 
 func (r *MonitorRepository) ListRecentSnapshots(ctx context.Context, projectID uuid.UUID, limit int) ([]AnswerSnapshotModel, error) {
 	var snaps []AnswerSnapshotModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("sampled_at desc").Limit(limit).Find(&snaps).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("sampled_at desc").Limit(limit).Scopes(PageScope(ctx)).Find(&snaps).Error
 	return snaps, err
 }
 
@@ -87,7 +87,7 @@ func NewOpportunityRepository(db *gorm.DB) *OpportunityRepository {
 
 func (r *OpportunityRepository) ListOpportunities(ctx context.Context, projectID uuid.UUID) ([]OpportunityModel, error) {
 	var opps []OpportunityModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("score desc").Find(&opps).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("score desc").Scopes(PageScope(ctx)).Find(&opps).Error
 	return opps, err
 }
 
@@ -110,7 +110,7 @@ func NewStrategyRepository(db *gorm.DB) *StrategyRepository {
 
 func (r *StrategyRepository) ListStrategies(ctx context.Context, projectID uuid.UUID) ([]StrategyModel, error) {
 	var list []StrategyModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("created_at desc").Find(&list).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("created_at desc").Scopes(PageScope(ctx)).Find(&list).Error
 	return list, err
 }
 
@@ -129,7 +129,7 @@ func NewContentRepository(db *gorm.DB) *ContentRepository {
 
 func (r *ContentRepository) ListAssets(ctx context.Context, projectID uuid.UUID) ([]ContentAssetModel, error) {
 	var list []ContentAssetModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("updated_at desc").Find(&list).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("updated_at desc").Scopes(PageScope(ctx)).Find(&list).Error
 	return list, err
 }
 
@@ -151,7 +151,7 @@ func (r *ContentRepository) CreatePublication(ctx context.Context, pub *Publicat
 
 func (r *ContentRepository) ListPublications(ctx context.Context, projectID uuid.UUID) ([]PublicationModel, error) {
 	var pubs []PublicationModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("created_at desc").Find(&pubs).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("created_at desc").Scopes(PageScope(ctx)).Find(&pubs).Error
 	return pubs, err
 }
 
@@ -166,7 +166,7 @@ func NewEvolutionRepository(db *gorm.DB) *EvolutionRepository {
 
 func (r *EvolutionRepository) ListRules(ctx context.Context, projectID uuid.UUID) ([]RuleModel, error) {
 	var rules []RuleModel
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("created_at desc").Find(&rules).Error
+	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("created_at desc").Scopes(PageScope(ctx)).Find(&rules).Error
 	return rules, err
 }
 
@@ -259,15 +259,37 @@ func (r *UserRepository) RotateRefreshToken(ctx context.Context, oldToken, newTo
 }
 
 func (r *UserRepository) RevokeUserRefreshTokens(ctx context.Context, userID uuid.UUID) error {
-	return r.db.WithContext(ctx).Model(&RefreshTokenModel{}).Where("user_id = ?", userID).Update("revoked", true).Error
+	return r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&UserModel{}).Where("id = ?", userID).Update("auth_version", gorm.Expr("auth_version + 1")).Error; err != nil {
+			return err
+		}
+		return tx.Model(&RefreshTokenModel{}).Where("user_id = ?", userID).Update("revoked", true).Error
+	})
 }
 
-func (r *UserRepository) UpdateProfile(ctx context.Context, userID uuid.UUID, updates map[string]interface{}) (*UserModel, error) {
+func (r *UserRepository) UpdateProfile(ctx context.Context, userID uuid.UUID, updates map[string]interface{}, expectedPasswordHash string) (*UserModel, error) {
 	var user UserModel
 	if err := r.db.WithContext(ctx).Where("id = ? AND status = 'active'", userID).First(&user).Error; err != nil {
 		return nil, err
 	}
-	if err := r.db.WithContext(ctx).Model(&user).Updates(updates).Error; err != nil {
+	if err := r.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		q := tx.Model(&UserModel{}).Where("id = ? AND status = 'active'", userID)
+		if _, changed := updates["password_hash"]; changed {
+			q = q.Where("password_hash = ?", expectedPasswordHash)
+			updates["auth_version"] = gorm.Expr("auth_version + 1")
+		}
+		result := q.Updates(updates)
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected != 1 {
+			return domain.ErrConflict
+		}
+		if _, changed := updates["password_hash"]; changed {
+			return tx.Model(&RefreshTokenModel{}).Where("user_id = ?", userID).Update("revoked", true).Error
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 	if err := r.db.WithContext(ctx).Where("id = ?", userID).First(&user).Error; err != nil {

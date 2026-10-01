@@ -144,30 +144,46 @@ func (w *Worker) execute(ctx context.Context, job repository.JobModel) (err erro
 func (w *Worker) Reconcile(ctx context.Context) error {
 	db := w.DB.WithContext(ctx)
 	var jobs []repository.JobModel
-	if err := db.Where("kind IN ('evolution','approved_action') AND status IN ('failed','cancelled')").Order("created_at DESC").Limit(200).Find(&jobs).Error; err != nil {
+	if err := db.Where("kind IN ('evolution','approved_action') AND status IN ('failed','cancelled') AND reconciled_at IS NULL").Order("created_at, id").Limit(200).Find(&jobs).Error; err != nil {
 		return err
 	}
 	for _, job := range jobs {
-		if job.Kind == "evolution" {
-			if err := db.Model(&repository.EvolutionRunModel{}).Where("id = ? AND project_id = ? AND status IN ('queued','running')", job.RunID, job.ProjectID).Updates(map[string]interface{}{"status": job.Status, "completed_at": time.Now(), "stage_name": job.ErrorMessage}).Error; err != nil {
-				return err
-			}
-			continue
-		}
-		var payload approvedActionPayload
-		if json.Unmarshal([]byte(job.Payload), &payload) != nil {
-			continue
-		}
 		if err := db.Transaction(func(tx *gorm.DB) error {
-			result := tx.Model(&repository.CopilotCheckpointModel{}).Where("session_id = ? AND interrupt_id = ? AND status = 'queued'", payload.State.SessionID, payload.State.InterruptID).Update("status", job.Status)
+			// A conditional claim prevents concurrent reconcilers from producing duplicate messages.
+			result := tx.Model(&repository.JobModel{}).Where("id = ? AND reconciled_at IS NULL", job.ID).Update("reconciled_at", time.Now())
 			if result.Error != nil {
 				return result.Error
 			}
 			if result.RowsAffected == 0 {
 				return nil
 			}
-			if err := tx.Model(&repository.CopilotMessageModel{}).Where("session_id = ? AND card_status = 'queued'", payload.State.SessionID).Update("card_status", job.Status).Error; err != nil {
+			if job.Kind == "evolution" {
+				return tx.Model(&repository.EvolutionRunModel{}).Where("id = ? AND project_id = ? AND status IN ('queued','running')", job.RunID, job.ProjectID).Updates(map[string]interface{}{"status": job.Status, "completed_at": time.Now(), "stage_name": job.ErrorMessage}).Error
+			}
+			var payload approvedActionPayload
+			if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
+				slog.Error("invalid failed job payload; parent requires manual reconciliation", "job_id", job.ID, "error", err)
+				return nil
+			}
+			result = tx.Model(&repository.CopilotCheckpointModel{}).Where("session_id = ? AND interrupt_id = ? AND status = 'queued'", payload.State.SessionID, payload.State.InterruptID).Update("status", job.Status)
+			if result.Error != nil {
+				return result.Error
+			}
+			if result.RowsAffected == 0 {
+				return nil
+			}
+			var messages []repository.CopilotMessageModel
+			if err := tx.Where("session_id = ? AND card_status = 'queued'", payload.State.SessionID).Find(&messages).Error; err != nil {
 				return err
+			}
+			for _, message := range messages {
+				var preview CopilotActionPreview
+				if json.Unmarshal([]byte(message.CardPayload), &preview) != nil || preview.InterruptID != payload.State.InterruptID {
+					continue
+				}
+				if err := tx.Model(&message).Update("card_status", job.Status).Error; err != nil {
+					return err
+				}
 			}
 			return tx.Create(&repository.CopilotMessageModel{SessionID: payload.State.SessionID, Role: "assistant", Content: "任务未确认完成：" + job.ErrorMessage + "。外部执行可能已产生影响，请先核对回执或目标系统。"}).Error
 		}); err != nil {

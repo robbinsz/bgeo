@@ -7,7 +7,6 @@ import (
 	"github.com/robbinsz/bgeo/internal/repository"
 	"gorm.io/gorm"
 	"net/http"
-	"strings"
 )
 
 func CurrentUser(db *gorm.DB) gin.HandlerFunc {
@@ -20,6 +19,10 @@ func CurrentUser(db *gorm.DB) gin.HandlerFunc {
 		var user repository.UserModel
 		if err := db.WithContext(c.Request.Context()).Where("id = ? AND status = 'active'", id).First(&user).Error; err != nil {
 			c.AbortWithStatusJSON(401, gin.H{"error": "account is unavailable"})
+			return
+		}
+		if c.GetInt("auth_version") != user.AuthVersion {
+			c.AbortWithStatusJSON(401, gin.H{"error": "session revoked", "code": "SESSION_REVOKED"})
 			return
 		}
 		c.Set("user_role", user.Role)
@@ -47,21 +50,17 @@ func AuthorizeProject(db *gorm.DB) gin.HandlerFunc {
 			}
 			a.Role = member.Role
 		}
-		path := c.FullPath()
-		write := c.Request.Method != http.MethodGet && c.Request.Method != http.MethodHead
-		if write && !domain.CanWrite(a.Role) {
-			c.AbortWithStatusJSON(403, gin.H{"error": "write permission required"})
+		policy, known := projectPolicies[c.Request.Method+" "+c.FullPath()]
+		if !known {
+			c.AbortWithStatusJSON(403, gin.H{"error": "route policy is not configured"})
 			return
 		}
-		if (strings.Contains(path, "/projects/current") || strings.Contains(path, "/system/") || strings.HasPrefix(path, "/api/v1/harness/") || strings.Contains(path, "/channels") || strings.Contains(path, "/members")) && write && a.Role != "admin" && a.Role != "owner" {
-			c.AbortWithStatusJSON(403, gin.H{"error": "project administrator required"})
+		allowed := policy.permission == "read" || policy.permission == "write" && domain.CanWrite(a.Role) || policy.permission == "review" && domain.CanReview(a.Role) || policy.permission == "admin" && (a.Role == "admin" || a.Role == "owner")
+		if !allowed {
+			c.AbortWithStatusJSON(403, gin.H{"error": "insufficient project permission"})
 			return
 		}
-		if write && (strings.HasSuffix(path, "/approve") || strings.HasSuffix(path, "/rollback") || strings.HasSuffix(path, "/publish")) && !domain.CanReview(a.Role) {
-			c.AbortWithStatusJSON(403, gin.H{"error": "review permission required"})
-			return
-		}
-		if project.IsPaused && write && (strings.Contains(path, "/runs") || strings.HasSuffix(path, "/publish")) {
+		if project.IsPaused && policy.execution {
 			c.AbortWithStatusJSON(409, gin.H{"error": "project is paused"})
 			return
 		}
@@ -74,39 +73,12 @@ func AuthorizeProject(db *gorm.DB) gin.HandlerFunc {
 				return
 			}
 			var model interface{}
-			ownerSession := false
-			switch {
-			case strings.Contains(path, "/copilot/sessions/"):
-				model = &repository.CopilotSessionModel{}
-				ownerSession = true
-			case strings.Contains(path, "/copilot/traces/"):
-				model = &repository.AgentExecutionTraceModel{}
-			case strings.Contains(path, "/opportunities/"):
-				model = &repository.OpportunityModel{}
-			case strings.Contains(path, "/evolution/rules/"):
-				model = &repository.RuleModel{}
-			case strings.Contains(path, "/harness/mcp-servers/"):
-				model = &repository.MCPServerModel{}
-			case strings.Contains(path, "/harness/memory/"):
-				model = &repository.MemoryEntryModel{}
-			case strings.Contains(path, "/harness/skills/"):
-				model = &repository.CustomSkillModel{}
-			case strings.Contains(path, "/content/assets/"):
-				model = &repository.ContentAssetModel{}
-			case strings.Contains(path, "/experiments/"):
-				model = &repository.ExperimentModel{}
-			case strings.Contains(path, "/projects/facts/"):
-				model = &repository.BrandFactModel{}
-			case strings.Contains(path, "/jobs/"):
-				model = &repository.JobModel{}
-			case strings.Contains(path, "/channels/"):
-				model = &repository.PublishChannelModel{}
-			case strings.Contains(path, "/publications/"):
-				model = &repository.PublicationModel{}
+			if policy.resource != nil {
+				model = policy.resource()
 			}
 			if model != nil {
 				q := db.WithContext(c.Request.Context()).Model(model).Where("id = ? AND project_id = ?", resourceID, a.ProjectID)
-				if ownerSession {
+				if policy.ownedSession {
 					q = q.Where("user_id = ? AND is_archived = false", a.UserID)
 				}
 				var count int64

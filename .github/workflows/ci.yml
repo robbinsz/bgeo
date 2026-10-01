@@ -36,7 +36,7 @@ jobs:
       - name: PostgreSQL concurrency and isolation contracts
         env:
           TEST_POSTGRES_DSN: postgres://bgeo_test:test_only_password@127.0.0.1:5432/bgeo_test?sslmode=disable
-        run: go test -race ./internal/usecase ./internal/delivery/http -timeout 120s
+        run: go test -race ./... -timeout 180s
       - run: go build ./cmd/server ./cmd/worker ./cmd/manage
   frontend:
     runs-on: ubuntu-latest
@@ -55,3 +55,5 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e

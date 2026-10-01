@@ -67,7 +67,7 @@ func (r *HarnessRepository) ListMCPServers(ctx context.Context, projectID uuid.U
 	err := r.db.WithContext(ctx).
 		Where("project_id = ?", projectID).
 		Order("created_at asc").
-		Find(&servers).Error
+		Scopes(PageScope(ctx)).Find(&servers).Error
 	return servers, err
 }
 
@@ -123,7 +123,7 @@ func (r *HarnessRepository) ListMemoryEntries(ctx context.Context, projectID uui
 	if memType != "" {
 		q = q.Where("memory_type = ?", memType)
 	}
-	err := q.Order("is_pinned desc, score_weight desc, created_at desc").Find(&entries).Error
+	err := q.Order("is_pinned desc, score_weight desc, created_at desc").Scopes(PageScope(ctx)).Find(&entries).Error
 	return entries, err
 }
 
@@ -200,7 +200,7 @@ func (r *HarnessRepository) ListCustomSkills(ctx context.Context, projectID uuid
 	err := r.db.WithContext(ctx).
 		Where("project_id = ?", projectID).
 		Order("created_at desc").
-		Find(&list).Error
+		Scopes(PageScope(ctx)).Find(&list).Error
 	return list, err
 }
 
@@ -219,6 +219,13 @@ func (r *HarnessRepository) CreateCustomSkill(ctx context.Context, skill *Custom
 
 func (r *HarnessRepository) DeleteCustomSkill(ctx context.Context, id uuid.UUID) error {
 	return r.db.WithContext(ctx).Where("id = ? AND project_id = ?", id, domain.ActorFrom(ctx).ProjectID).Delete(&CustomSkillModel{}).Error
+}
+
+func (r *HarnessRepository) UpdateCustomSkill(ctx context.Context, id uuid.UUID, updates map[string]interface{}) error {
+	return r.db.WithContext(ctx).
+		Model(&CustomSkillModel{}).
+		Where("id = ? AND project_id = ?", id, domain.ActorFrom(ctx).ProjectID).
+		Updates(updates).Error
 }
 
 func (r *HarnessRepository) ToggleCustomSkill(ctx context.Context, id uuid.UUID) (*CustomSkillModel, error) {

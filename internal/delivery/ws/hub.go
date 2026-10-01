@@ -31,6 +31,9 @@ var GlobalHub *Hub
 
 func InitGlobalHub() *Hub { h := &Hub{clients: map[*client]bool{}}; GlobalHub = h; return h }
 func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
+	h.HandleWSGuarded(w, r, nil)
+}
+func (h *Hub) HandleWSGuarded(w http.ResponseWriter, r *http.Request, authorize func() bool) {
 	actor := domain.ActorFrom(r.Context())
 	if actor.ProjectID == uuid.Nil || actor.UserID == uuid.Nil {
 		http.Error(w, "unauthorized", 401)
@@ -64,6 +67,8 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	c := &client{conn: conn, projectID: actor.ProjectID, queue: make(chan []byte, 32)}
+	ack, _ := json.Marshal(EventMessage{Event: "SUBSCRIBED", Topic: "project", Timestamp: time.Now().UnixMilli(), Payload: map[string]string{"project_id": actor.ProjectID.String()}})
+	c.queue <- ack
 	h.mu.Lock()
 	h.clients[c] = true
 	h.mu.Unlock()
@@ -77,11 +82,17 @@ func (h *Hub) HandleWS(w http.ResponseWriter, r *http.Request) {
 				if !ok {
 					return
 				}
+				if authorize != nil && !authorize() {
+					return
+				}
 				conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				if conn.WriteMessage(websocket.TextMessage, msg) != nil {
 					return
 				}
 			case <-ticker.C:
+				if authorize != nil && !authorize() {
+					return
+				}
 				conn.SetWriteDeadline(time.Now().Add(5 * time.Second))
 				if conn.WriteMessage(websocket.PingMessage, nil) != nil {
 					return
@@ -120,7 +131,7 @@ func (h *Hub) Close() {
 	}
 }
 func (h *Hub) BroadcastProject(projectID uuid.UUID, event, topic string, payload interface{}) {
-	if projectID == uuid.Nil {
+	if h == nil || projectID == uuid.Nil {
 		return
 	}
 	data, err := json.Marshal(EventMessage{event, topic, time.Now().UnixMilli(), payload})

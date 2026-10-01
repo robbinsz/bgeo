@@ -1,0 +1,162 @@
+name: ${COMPOSE_PROJECT_NAME:-bgeo}
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-app-environment: &app-environment
+  APP_ENV: production
+  APP_MODE: live
+  HTTP_ADDR: ":8080"
+  DB_DRIVER: postgres
+  DATABASE_URL: "postgres://bgeo:${DB_PASSWORD:?Run make init first}@postgres:5432/bgeo?sslmode=disable"
+  AUTO_MIGRATE: "false"
+  SEED_DEMO: "false"
+  ALLOW_LOCAL_OUTBOUND: "false"
+  JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:?Run make init first}
+  JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:?Run make init first}
+  CREDENTIAL_ENCRYPTION_KEY: ${CREDENTIAL_ENCRYPTION_KEY:?Run make init first}
+  ALLOWED_ORIGINS: "https://${DOMAIN:?Set DOMAIN in the production env file}"
+  TRUSTED_PROXIES: ${TRUSTED_PROXIES:-172.16.0.0/12,192.168.0.0/16,10.0.0.0/8}
+  WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-4}
+  PERPLEXITY_API_KEY: ${PERPLEXITY_API_KEY:-}
+  COPILOT_API_KEY: ${COPILOT_API_KEY:-}
+  COPILOT_BASE_URL: ${COPILOT_BASE_URL:-https://api.deepseek.com/v1}
+  COPILOT_MODEL: ${COPILOT_MODEL:-deepseek-chat}
+
+x-app: &app
+  image: bgeo:${APP_VERSION:-local}
+  build:
+    context: .
+    target: production
+  pull_policy: never
+  user: "10001:10001"
+  init: true
+  read_only: true
+  tmpfs:
+    - /tmp:rw,noexec,nosuid,size=64m,mode=1777
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  environment: *app-environment
+  networks: [backend, edge]
+  depends_on:
+    postgres:
+      condition: service_healthy
+  stop_grace_period: 40s
+  logging: *logging
+  mem_limit: 1g
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: bgeo
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run make init first}
+      APP_DB_PASSWORD: ${DB_PASSWORD:?Run make init first}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - type: bind
+        source: ./deploy/postgres-init.sh
+        target: /docker-entrypoint-initdb.d/10-bgeo.sh
+        read_only: true
+        bind:
+          create_host_path: false
+    networks: [backend]
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -h 127.0.0.1 -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+    stop_grace_period: 60s
+    security_opt: [no-new-privileges:true]
+    logging: *logging
+    mem_limit: 1g
+
+  api:
+    <<: *app
+    command: [server]
+    restart: unless-stopped
+    volumes:
+      - uploads:/app/data/uploads
+    healthcheck:
+      test: [CMD, wget, -q, -T, "5", -O, /dev/null, "http://127.0.0.1:8080/ready"]
+      interval: 10s
+      timeout: 6s
+      retries: 12
+      start_period: 20s
+
+  worker:
+    <<: *app
+    command: [worker]
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+
+  migrate:
+    <<: *app
+    command: [manage, migrate]
+    profiles: [tools]
+    restart: "no"
+
+  bootstrap:
+    <<: *app
+    command: [manage, bootstrap]
+    profiles: [tools]
+    restart: "no"
+    environment:
+      <<: *app-environment
+      BOOTSTRAP_EMAIL: ${BOOTSTRAP_EMAIL:-}
+      BOOTSTRAP_PASSWORD: ${BOOTSTRAP_PASSWORD:-}
+      BOOTSTRAP_BRAND: ${BOOTSTRAP_BRAND:-}
+
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMAIN: ${DOMAIN:?Set DOMAIN in the production env file}
+      ACME_EMAIL: ${ACME_EMAIL:?Set ACME_EMAIL in the production env file}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - type: bind
+        source: ./deploy/Caddyfile
+        target: /etc/caddy/Caddyfile
+        read_only: true
+        bind:
+          create_host_path: false
+      - caddy_data:/data
+      - caddy_config:/config
+    networks: [edge]
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp:rw,noexec,nosuid,size=16m
+    cap_drop: [ALL]
+    cap_add: [NET_BIND_SERVICE]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    logging: *logging
+    mem_limit: 256m
+
+networks:
+  backend:
+    internal: true
+  edge:
+
+volumes:
+  postgres_data:
+  uploads:
+  caddy_data:
+  caddy_config:

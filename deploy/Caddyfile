@@ -1,0 +1,50 @@
+{
+	email {$ACME_EMAIL}
+	admin off
+	log default {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete token
+					delete access_token
+				}
+				request>headers delete
+				resp_headers delete
+			}
+		}
+	}
+}
+
+{$DOMAIN} {
+	# Keep the current SSE/WebSocket endpoints outside compression buffers.
+	@compressible not path /api/v1/copilot/chat /api/v1/copilot/resume /ws/*
+	encode @compressible zstd gzip
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options nosniff
+		Referrer-Policy no-referrer
+		-Server
+	}
+	log {
+		output stdout
+		format filter {
+			wrap json
+			fields {
+				request>uri query {
+					delete token
+					delete access_token
+				}
+				request>headers delete
+				resp_headers delete
+			}
+		}
+	}
+	@assets path /assets/*
+	header @assets Cache-Control "public, max-age=31536000, immutable" {
+		match status 2xx
+	}
+	# Caddy flushes text/event-stream automatically and propagates client cancellation.
+	reverse_proxy api:8080
+}

@@ -18,7 +18,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/robbinsz/bgeo/internal/delivery/ws"
 	"github.com/robbinsz/bgeo/internal/repository"
 	"github.com/smallnest/langgraphgo/graph"
 )
@@ -95,7 +94,7 @@ type CopilotUsecase struct {
 	oppRepo     *repository.OpportunityRepository
 	projectRepo *repository.ProjectRepository
 	contentRepo *repository.ContentRepository
-	hub         *ws.Hub
+	hub         domain.EventSink
 }
 
 func NewCopilotUsecase(
@@ -107,7 +106,7 @@ func NewCopilotUsecase(
 	oRepo *repository.OpportunityRepository,
 	pRepo *repository.ProjectRepository,
 	cRepo *repository.ContentRepository,
-	hub *ws.Hub,
+	hub domain.EventSink,
 ) *CopilotUsecase {
 	return &CopilotUsecase{
 		copilotRepo: copilotRepo,
@@ -466,6 +465,7 @@ func (uc *CopilotUsecase) ChatStream(ctx context.Context, sessionID, projectID, 
 	toolResponses := []OpenAIMessage{}
 	for _, call := range calls {
 		name, args := call.Function.Name, call.Function.Arguments
+		sendSSE(writer, flusher, "tool_start", map[string]interface{}{"tool": name, "title": name, "arguments": redactJSON(args)})
 		var toolErr error
 		summary := ""
 		if !allowed[name] {
@@ -507,10 +507,14 @@ func (uc *CopilotUsecase) ChatStream(ctx context.Context, sessionID, projectID, 
 		if err = uc.copilotRepo.RecordAuditLog(ctx, &repository.CopilotAuditLogModel{ProjectID: projectID, UserID: userID, SessionID: sessionID, ToolName: name, InputPayload: redactJSON(args), ExecutionStatus: status, ExecutionRisk: map[bool]string{true: "confirmed", false: "direct"}[requiresApproval(name)]}); err != nil {
 			return err
 		}
-		steps = append(steps, ExecutionStep{StepID: uuid.NewString(), StepType: "tool_execution", Title: name, Status: status, Description: summary, Timestamp: time.Now()})
+		stepDetails := map[string]interface{}{
+			"arguments": redactJSON(args),
+			"result":    summary,
+		}
+		steps = append(steps, ExecutionStep{StepID: uuid.NewString(), StepType: "tool_execution", Title: name, Status: status, Description: summary, Details: stepDetails, Timestamp: time.Now()})
 		toolResponses = append(toolResponses, OpenAIMessage{Role: "tool", ToolCallID: call.ID, Content: summary})
 		response += "\n" + summary
-		sendSSE(writer, flusher, "tool_done", map[string]interface{}{"tool": name, "result": summary, "status": status})
+		sendSSE(writer, flusher, "tool_done", map[string]interface{}{"tool": name, "result": summary, "status": status, "arguments": redactJSON(args)})
 		// One outstanding approval per session; remaining calls must be proposed in a new turn.
 		if cardStatus == "pending" {
 			break
@@ -523,7 +527,9 @@ func (uc *CopilotUsecase) ChatStream(ctx context.Context, sessionID, projectID, 
 			response = text
 		}
 	}
-	sendSSE(writer, flusher, "message_chunk", map[string]string{"chunk": response})
+	if response != "" {
+		sendSSE(writer, flusher, "message_chunk", map[string]string{"chunk": response})
+	}
 	traceID := uuid.New()
 	timeline, _ := json.Marshal(steps)
 	if err = uc.copilotRepo.SaveExecutionTrace(ctx, &repository.AgentExecutionTraceModel{BaseGormModel: repository.BaseGormModel{ID: traceID}, ProjectID: projectID, SessionID: sessionID, UserPrompt: prompt, ModelName: cfg.ModelName, TotalDurationMs: time.Since(start).Milliseconds(), Status: overall, TimelineJSON: string(timeline)}); err != nil {
@@ -542,7 +548,7 @@ func (uc *CopilotUsecase) ChatStream(ctx context.Context, sessionID, projectID, 
 			return err
 		}
 	}
-	sendSSE(writer, flusher, "done", map[string]interface{}{"session_id": sessionID, "title": session.Title, "trace_id": traceID, "status": overall})
+	sendSSE(writer, flusher, "done", map[string]interface{}{"session_id": sessionID, "title": session.Title, "trace_id": traceID, "status": overall, "steps": steps})
 	return nil
 }
 

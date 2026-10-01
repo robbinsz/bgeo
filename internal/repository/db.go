@@ -19,7 +19,7 @@ import (
 var DefaultProjectID = uuid.MustParse("00000000-0000-0000-0000-000000000001")
 var DefaultOrgID = uuid.MustParse("00000000-0000-0000-0000-000000000000")
 
-const SchemaVersion = 1
+const SchemaVersion = 3
 
 func SchemaModels() []interface{} {
 	return []interface{}{
@@ -80,23 +80,107 @@ func Migrate(ctx context.Context, db *gorm.DB) error {
 		if version > SchemaVersion {
 			return fmt.Errorf("database schema is newer than this binary")
 		}
-		if version == 0 {
-			if err := tx.AutoMigrate(SchemaModels()...); err != nil {
+		for next := int(version) + 1; next <= SchemaVersion; next++ {
+			switch next {
+			case 1:
+				if err := tx.AutoMigrate(SchemaModels()...); err != nil {
+					return err
+				}
+			case 2:
+				// Additive and transactional: existing credentials and job history are preserved.
+				if !tx.Migrator().HasColumn(&UserModel{}, "AuthVersion") {
+					if err := tx.Migrator().AddColumn(&UserModel{}, "AuthVersion"); err != nil {
+						return err
+					}
+				}
+				if !tx.Migrator().HasColumn(&JobModel{}, "ReconciledAt") {
+					if err := tx.Migrator().AddColumn(&JobModel{}, "ReconciledAt"); err != nil {
+						return err
+					}
+				}
+				if err := tx.Exec("CREATE INDEX IF NOT EXISTS idx_job_reconciliation ON job_models (kind, status, reconciled_at, created_at, id)").Error; err != nil {
+					return err
+				}
+			case 3:
+				for _, constraint := range []struct {
+					model interface{}
+					name  string
+				}{
+					{&JobModel{}, "Project"}, {&ProjectMemberModel{}, "Project"}, {&ProjectMemberModel{}, "User"}, {&CopilotMessageModel{}, "Session"},
+				} {
+					if !tx.Migrator().HasConstraint(constraint.model, constraint.name) {
+						if err := createConstraintPreservingIndexes(tx, constraint.model, constraint.name); err != nil {
+							return fmt.Errorf("schema relationship %T.%s: %w", constraint.model, constraint.name, err)
+						}
+					}
+				}
+			}
+			if err := tx.Create(&SchemaMigration{Version: next, AppliedAt: time.Now()}).Error; err != nil {
 				return err
 			}
-			return tx.Create(&SchemaMigration{Version: SchemaVersion, AppliedAt: time.Now()}).Error
 		}
 		return nil
 	})
 }
 
+// SQLite rebuilds a table when adding a constraint, dropping its explicit indexes.
+// Preserve the database's index definitions, including indexes outside GORM tags.
+func createConstraintPreservingIndexes(db *gorm.DB, model interface{}, name string) error {
+	var indexes []struct {
+		Name string
+		SQL  string
+	}
+	if db.Dialector.Name() == "sqlite" {
+		stmt := &gorm.Statement{DB: db}
+		if err := stmt.Parse(model); err != nil {
+			return err
+		}
+		if err := db.Raw("SELECT name, sql FROM sqlite_master WHERE type = 'index' AND tbl_name = ? AND sql IS NOT NULL", stmt.Table).Scan(&indexes).Error; err != nil {
+			return err
+		}
+	}
+	if err := db.Migrator().CreateConstraint(model, name); err != nil {
+		return err
+	}
+	for _, index := range indexes {
+		if !db.Migrator().HasIndex(model, index.Name) {
+			if err := db.Exec(index.SQL).Error; err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func VerifySchema(ctx context.Context, db *gorm.DB) error {
+	db = db.WithContext(ctx)
 	var version int64
 	if err := db.WithContext(ctx).Model(&SchemaMigration{}).Select("COALESCE(MAX(version),0)").Scan(&version).Error; err != nil {
 		return fmt.Errorf("schema is not ready; run the explicit migrate command: %w", err)
 	}
 	if version != SchemaVersion {
 		return fmt.Errorf("schema version mismatch: database=%d binary=%d", version, SchemaVersion)
+	}
+	for _, model := range SchemaModels() {
+		if !db.WithContext(ctx).Migrator().HasTable(model) {
+			return fmt.Errorf("schema table missing for %T", model)
+		}
+	}
+	if !db.Migrator().HasColumn(&UserModel{}, "AuthVersion") || !db.Migrator().HasColumn(&JobModel{}, "ReconciledAt") {
+		return fmt.Errorf("schema columns missing; run the explicit migrate command")
+	}
+	for _, index := range []string{"idx_job_reconciliation", "idx_job_ready", "idx_job_models_idempotency_key"} {
+		if !db.Migrator().HasIndex(&JobModel{}, index) {
+			return fmt.Errorf("schema job index missing: %s", index)
+		}
+	}
+	for _, constraint := range []struct {
+		model interface{}
+		name  string
+	}{{&JobModel{}, "Project"}, {&ProjectMemberModel{}, "Project"}, {&ProjectMemberModel{}, "User"}, {&CopilotMessageModel{}, "Session"}} {
+		if !db.WithContext(ctx).Migrator().HasConstraint(constraint.model, constraint.name) {
+			return fmt.Errorf("schema relationship missing for %T.%s", constraint.model, constraint.name)
+		}
 	}
 	return nil
 }

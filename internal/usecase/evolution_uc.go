@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/google/uuid"
-	"github.com/robbinsz/bgeo/internal/delivery/ws"
 	"github.com/robbinsz/bgeo/internal/domain"
 	"github.com/robbinsz/bgeo/internal/repository"
 	"github.com/robbinsz/bgeo/pkg/ruleengine"
@@ -20,10 +19,10 @@ import (
 type EvolutionUsecase struct {
 	evoRepo   *repository.EvolutionRepository
 	evaluator *ruleengine.Evaluator
-	hub       *ws.Hub
+	hub       domain.EventSink
 }
 
-func NewEvolutionUsecase(r *repository.EvolutionRepository, e *ruleengine.Evaluator, h *ws.Hub) *EvolutionUsecase {
+func NewEvolutionUsecase(r *repository.EvolutionRepository, e *ruleengine.Evaluator, h domain.EventSink) *EvolutionUsecase {
 	return &EvolutionUsecase{r, e, h}
 }
 

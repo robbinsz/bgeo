@@ -4,6 +4,8 @@
 
 ## 启动
 
+已配置 `.env.go` 的本机 development / SQLite 安装可执行 `python3 scripts/start-local.py`，一次启动后端、Worker 和前端，按 Ctrl+C 停止。脚本沿用账号和密钥；schema 过旧时先备份 SQLite，再执行显式迁移，不写入演示数据。启动日志在 `data/local-run`。`python3 scripts/start-local.py --check` 只检查启动前置条件。
+
 需要 Go（版本见 go.mod）、Node.js 22.20+。复制 `.env.go.example` 为本机私有配置并导出环境变量；Go 不读取原有 Laravel `.env`。为两个 JWT 密钥分别生成随机值（至少 32 字节），为 `CREDENTIAL_ENCRYPTION_KEY` 设置 `openssl rand -base64 32` 生成的值。HTTP 与 Worker 必须使用相同密钥，保持密钥持久化。
 
 ```sh
@@ -58,20 +60,26 @@ npm ci
 npm run lint
 npm test
 npm run build
+npx playwright install chromium
+npm run test:e2e
 ```
 
-将 `TEST_POSTGRES_DSN` 指向**专用测试 PostgreSQL** 后运行 `go test -race ./internal/usecase ./internal/delivery/http -timeout 120s`。每个测试新建并销毁自己的 schema。测试账户需要建 schema 权限。CI 执行 SQLite、PostgreSQL 并发和前端测试。
+将 `TEST_POSTGRES_DSN` 指向**专用测试 PostgreSQL** 后运行 `go test -race ./... -timeout 180s`。每个测试新建并销毁自己的 schema。测试账户需要建 schema 权限。CI 已配置 SQLite、PostgreSQL 并发、前端单元测试和 Chromium 浏览器回归。浏览器测试使用 API fixtures；真实提供方和发布渠道需要独立联调。
+
+架构改造、复评分和验证范围见 [优化报告](docs/architecture-optimization.md)。
 
 ## 生产运行与恢复
+
+Docker Compose 生产部署已包含 PostgreSQL、API、Worker 和 Caddy 自动 HTTPS。运行 `make init` 生成私有配置与持久密钥，编辑 `.env.production` 中的域名、证书邮箱和管理员邮箱后，首次执行 `make install`；后续版本执行 `make deploy`，自动停服备份并显式迁移。运行 `make help` 查看其他命令；前置条件、恢复步骤和部署边界见 [生产部署说明](docs/deployment.md)。
 
 `APP_ENV=production` 强制 `APP_MODE=live`、PostgreSQL、不同的 JWT 强密钥和 32 字节加密密钥；禁止启动自动迁移与种子数据。仅允许 HTTPS 外部接口，DNS 解析后再次拒绝非公网地址，禁止跨主机重定向。配置允许的前端 Origin；反向代理日志必须去掉 WebSocket URL 中的 token 查询参数。部署 HTTPS 并关闭明文入口。
 
 构建 HTTP / Worker / manage 三个二进制，使用同一版本、数据库和密钥。进程管理器分别运行 HTTP、Worker，发送 SIGTERM 可优雅停止；停止 Worker 后未结束任务由租约恢复。监测任务为至少一次执行、快照按批次/问题/渠道去重，外部采样可能因响应丢失重复收费。审批任务最多执行一次；崩溃后的外部副作用必须核对回执或目标系统，不能假定没有执行。
 
-`/health` 为存活检查，`/ready` 验证数据库与 schema。监控结构化请求日志、任务状态/重试/错误、队列等待时间与租约过期；业务接口 `/jobs`、`/monitor/runs`、`/evolution/runs`、`/publications` 提供持久状态。建议告警：可领取任务等待超过 2 分钟、监测批次持续失败、未知发布回执出现、Worker 日志中租约或数据库错误。多 HTTP 实例下内存登录限流需由网关统一补充；跨进程推送以数据库轮询恢复为准。
+`/health` 为存活检查，`/ready` 在 3 秒期限内验证数据库与 schema。管理员可通过 `/api/v1/system/status` 查看持久任务状态计数、过期租约和未知发布回执。监控结构化请求日志、任务状态/重试/错误、队列等待时间与租约过期；业务接口 `/jobs`、`/monitor/runs`、`/evolution/runs`、`/publications` 提供持久状态。建议告警：可领取任务等待超过 2 分钟、监测批次持续失败、未知发布回执出现、Worker 日志中租约或数据库错误。多 HTTP 实例下内存登录限流需由网关统一补充；跨进程推送以数据库轮询恢复为准。
 
 取消运行中的任务是尽力停止后续步骤，不能撤销已经发出的外部请求；发布是否成功仍以持久回执为准。成功投递和核对未知回执时，回执与 48 小时复测任务在同一事务中保存。
 
-上线前先备份 PostgreSQL 和 `data/uploads`，加密密钥必须独立安全备份。只在发布步骤运行 `manage migrate`，HTTP/Worker 启动只验证 schema。当前为首个版本化基线迁移，不提供自动向下迁移；代码回退必须匹配数据库版本，必要时使用备份恢复。旧的未标记回答不会被当成真实采样，旧的明文凭证先在停服并备份后显式运行 `go run ./cmd/manage encrypt-credentials` 加密，旧的全局模型配置需要按项目重新配置，旧的无实验依据规则需重新审核。不要把旧 SQLite 文件直接当生产数据库。
+上线前先备份 PostgreSQL 和 `data/uploads`，加密密钥必须独立安全备份。只在发布步骤运行 `manage migrate`，HTTP/Worker 启动只验证 schema。当前 schema 为 v3：v1 基线、v2 会话撤销版本与任务对账标记、v3 关键外键约束。升级已有安装需要先备份再显式执行 `go run ./cmd/manage migrate`；存在孤立任务、成员或会话消息时迁移会失败并回滚，应先按业务来源核查这些记录。不会自动删除异常数据。不提供自动向下迁移；代码回退必须匹配数据库版本，必要时使用备份恢复。旧的未标记回答不会被当成真实采样，旧的明文凭证先在停服并备份后显式运行 `go run ./cmd/manage encrypt-credentials` 加密，旧的全局模型配置需要按项目重新配置，旧的无实验依据规则需重新审核。不要把旧 SQLite 文件直接当生产数据库。
 
 恢复演练：把备份恢复到新数据库，使用备份密钥启动匹配版本，验证登录/权限、事实及内容、一个受控采样批次和测试渠道的幂等回执；确认任务租约回收与未知回执处理；记录恢复时间和丢失窗口。压测、真实渠道联调和恢复演练必须在实际部署环境验收。本次代码改造不代表已经完成这些环境验收或达到任何认证级别。

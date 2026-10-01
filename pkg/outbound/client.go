@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -25,8 +26,37 @@ func ValidateURL(raw string) error {
 	return nil
 }
 
-// Addresses are checked at dial time, including redirected requests, to resist DNS rebinding.
+var transports sync.Map
+
+type transportKey struct {
+	allowLocal bool
+	timeout    time.Duration
+}
+
+// Pool connections only within the same outbound security policy.
 func Client(timeout time.Duration) *http.Client {
+	key := transportKey{os.Getenv("APP_ENV") != "production" && os.Getenv("ALLOW_LOCAL_OUTBOUND") == "true", timeout}
+	pooled, ok := transports.Load(key)
+	if !ok {
+		candidate := newTransport(timeout, key.allowLocal)
+		pooled, _ = transports.LoadOrStore(key, candidate)
+	}
+	return &http.Client{Transport: pooled.(*http.Transport), Timeout: timeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 3 {
+			return fmt.Errorf("too many redirects")
+		}
+		if err := ValidateURL(req.URL.String()); err != nil {
+			return err
+		}
+		if len(via) > 0 && !strings.EqualFold(req.URL.Host, via[0].URL.Host) {
+			return fmt.Errorf("cross-host redirects are disabled")
+		}
+		return nil
+	}}
+}
+
+// Addresses are checked at dial time, including redirected requests, to resist DNS rebinding.
+func newTransport(timeout time.Duration, allowLocal bool) *http.Transport {
 	dialer := &net.Dialer{Timeout: 10 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{TLSHandshakeTimeout: 10 * time.Second, ResponseHeaderTimeout: timeout, MaxIdleConns: 64, IdleConnTimeout: 90 * time.Second}
 	transport.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
@@ -38,7 +68,9 @@ func Client(timeout time.Duration) *http.Client {
 		if err != nil {
 			return nil, err
 		}
-		allowLocal := os.Getenv("APP_ENV") != "production" && os.Getenv("ALLOW_LOCAL_OUTBOUND") == "true"
+		if len(ips) == 0 {
+			return nil, fmt.Errorf("outbound host resolved to no addresses")
+		}
 		for _, a := range ips {
 			if !allowLocal && (!publicIP(a.IP)) {
 				return nil, fmt.Errorf("outbound address is not public")
@@ -53,18 +85,7 @@ func Client(timeout time.Duration) *http.Client {
 		}
 		return nil, err
 	}
-	return &http.Client{Transport: transport, Timeout: timeout, CheckRedirect: func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 3 {
-			return fmt.Errorf("too many redirects")
-		}
-		if err := ValidateURL(req.URL.String()); err != nil {
-			return err
-		}
-		if len(via) > 0 && !strings.EqualFold(req.URL.Host, via[0].URL.Host) {
-			return fmt.Errorf("cross-host redirects are disabled")
-		}
-		return nil
-	}}
+	return transport
 }
 
 func publicIP(ip net.IP) bool {

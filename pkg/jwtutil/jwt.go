@@ -30,11 +30,12 @@ var (
 )
 
 type CustomClaims struct {
-	UserID    uuid.UUID `json:"user_id"`
-	OrgID     uuid.UUID `json:"org_id"`
-	Email     string    `json:"email"`
-	Role      string    `json:"role"`
-	TokenType string    `json:"token_type"` // "access" or "refresh"
+	UserID      uuid.UUID `json:"user_id"`
+	OrgID       uuid.UUID `json:"org_id"`
+	Email       string    `json:"email"`
+	Role        string    `json:"role"`
+	TokenType   string    `json:"token_type"` // "access" or "refresh"
+	AuthVersion int       `json:"auth_version"`
 	jwt.RegisteredClaims
 }
 
@@ -71,16 +72,21 @@ func NewJWTService(accessSecret, refreshSecret string, accessTTL, refreshTTL tim
 
 // GenerateTokenPair generates both an access token and a refresh token for dual-token auth
 func (s *JWTService) GenerateTokenPair(userID, orgID uuid.UUID, email, role string) (accessToken, refreshToken string, accessExp, refreshExp int64, err error) {
+	return s.GenerateTokenPairWithVersion(userID, orgID, email, role, 0)
+}
+
+func (s *JWTService) GenerateTokenPairWithVersion(userID, orgID uuid.UUID, email, role string, authVersion int) (accessToken, refreshToken string, accessExp, refreshExp int64, err error) {
 	now := time.Now()
 
 	// 1. Access Token (Short-lived)
 	accessExpiration := now.Add(s.accessTTL)
 	accessClaims := &CustomClaims{
-		UserID:    userID,
-		OrgID:     orgID,
-		Email:     email,
-		Role:      role,
-		TokenType: "access",
+		UserID:      userID,
+		OrgID:       orgID,
+		Email:       email,
+		Role:        role,
+		TokenType:   "access",
+		AuthVersion: authVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(accessExpiration),
@@ -99,11 +105,12 @@ func (s *JWTService) GenerateTokenPair(userID, orgID uuid.UUID, email, role stri
 	// 2. Refresh Token (Long-lived)
 	refreshExpiration := now.Add(s.refreshTTL)
 	refreshClaims := &CustomClaims{
-		UserID:    userID,
-		OrgID:     orgID,
-		Email:     email,
-		Role:      role,
-		TokenType: "refresh",
+		UserID:      userID,
+		OrgID:       orgID,
+		Email:       email,
+		Role:        role,
+		TokenType:   "refresh",
+		AuthVersion: authVersion,
 		RegisteredClaims: jwt.RegisteredClaims{
 			ID:        uuid.NewString(),
 			ExpiresAt: jwt.NewNumericDate(refreshExpiration),

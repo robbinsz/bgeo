@@ -52,6 +52,8 @@ func JWTAuthMiddleware(jwtService *jwtutil.JWTService) gin.HandlerFunc {
 		c.Set("user_email", claims.Email)
 		c.Set("user_role", claims.Role)
 		c.Set("org_id", claims.OrgID)
+		c.Set("auth_version", claims.AuthVersion)
+		c.Set("access_expires_at", claims.ExpiresAt.Time)
 
 		ctx := context.WithValue(c.Request.Context(), UserIDKey, claims.UserID)
 		ctx = context.WithValue(ctx, UserEmailKey, claims.Email)

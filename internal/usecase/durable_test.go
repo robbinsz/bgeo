@@ -300,7 +300,7 @@ func TestFactsRejectUnsupportedAndPendingClaims(t *testing.T) {
 	uc := NewContentUsecase(repository.NewContentRepository(db), repository.NewProjectRepository(db))
 	db.Create(&repository.BrandFactModel{ProjectID: projectID, FactType: "claim", Statement: "Approved fact", Source: "source", Status: "approved"})
 	db.Create(&repository.BrandFactModel{ProjectID: projectID, FactType: "claim", Statement: "Pending fact", Source: "source", Status: "pending"})
-	for _, body := range []string{"Approved fact。Unverified promise。", "Pending fact", "Unknown", ""} {
+	for _, body := range []string{"Approved fact。Unverified promise。", "Approved fact。\n# Unsupported promise", "Pending fact", "Unknown", ""} {
 		check, err := uc.VerifyContentFacts(context.Background(), projectID, body)
 		if err != nil {
 			t.Fatal(err)
@@ -308,6 +308,10 @@ func TestFactsRejectUnsupportedAndPendingClaims(t *testing.T) {
 		if check.Passed {
 			t.Fatalf("unsupported content passed: %q", body)
 		}
+	}
+	checkTitle, err := uc.VerifyAssetFacts(context.Background(), projectID, "Unsupported title", "Approved fact。")
+	if err != nil || checkTitle.Passed {
+		t.Fatalf("unsupported title passed: %+v %v", checkTitle, err)
 	}
 	check, err := uc.VerifyContentFacts(context.Background(), projectID, "Approved fact。")
 	if err != nil || !check.Passed || len(check.Evidence) == 0 {
@@ -342,5 +346,40 @@ func TestModelBudgetReservationIsAtomic(t *testing.T) {
 	}
 	if record.TokensUsed != nil {
 		t.Fatal("unknown token usage fabricated")
+	}
+}
+
+func TestReconciliationDoesNotStarveOlderFailedRuns(t *testing.T) {
+	db := setupTestDB(t)
+	projectID := uuid.New()
+	testActorProject(t, db, projectID)
+	var runs []repository.EvolutionRunModel
+	var jobs []repository.JobModel
+	for i := 0; i < 205; i++ {
+		run := repository.EvolutionRunModel{BaseGormModel: repository.BaseGormModel{ID: uuid.New()}, ProjectID: projectID, Status: "queued"}
+		runs = append(runs, run)
+		jobs = append(jobs, repository.JobModel{ProjectID: projectID, RunID: &runs[len(runs)-1].ID, Kind: "evolution", Payload: "{}", Status: "failed", IdempotencyKey: uuid.NewString()})
+	}
+	if err := db.Create(&runs).Error; err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Create(&jobs).Error; err != nil {
+		t.Fatal(err)
+	}
+	worker := NewWorker(db, config.Config{}, nil)
+	for i := 0; i < 3; i++ {
+		if err := worker.Reconcile(context.Background()); err != nil {
+			t.Fatal(err)
+		}
+	}
+	var pending int64
+	db.Model(&repository.EvolutionRunModel{}).Where("project_id = ? AND status = 'queued'", projectID).Count(&pending)
+	if pending != 0 {
+		t.Fatalf("%d older runs were starved", pending)
+	}
+	var reconciled int64
+	db.Model(&repository.JobModel{}).Where("project_id = ? AND reconciled_at IS NOT NULL", projectID).Count(&reconciled)
+	if reconciled != 205 {
+		t.Fatalf("reconciled %d of 205 jobs", reconciled)
 	}
 }

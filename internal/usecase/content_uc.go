@@ -7,6 +7,7 @@ import (
 	"github.com/robbinsz/bgeo/internal/domain"
 	"github.com/robbinsz/bgeo/pkg/ruleengine"
 	"github.com/robbinsz/bgeo/pkg/secretutil"
+	"html"
 	"regexp"
 	"strings"
 
@@ -49,10 +50,16 @@ func (uc *ContentUsecase) VerifyContentFacts(ctx context.Context, projectID uuid
 	prefix := regexp.MustCompile(`^\s*(?:[-*]|[0-9]+[.)、])\s*`)
 	for _, raw := range sentences {
 		statement := strings.TrimSpace(raw)
-		if statement == "" || strings.HasPrefix(statement, "#") {
+		if statement == "" {
 			continue
 		}
+		// Headings are visible claims too. Never exempt them from evidence checks.
+		statement = strings.TrimSpace(strings.TrimLeft(statement, "#"))
 		statement = prefix.ReplaceAllString(statement, "")
+		statement = html.UnescapeString(strings.TrimSpace(statement))
+		if statement == "" {
+			continue
+		}
 		matched := false
 		for _, f := range facts {
 			if strings.TrimSpace(strings.TrimRight(f.Statement, "。！？")) == statement && strings.TrimSpace(f.Source) != "" {
@@ -85,6 +92,11 @@ func (uc *ContentUsecase) VerifyContentFacts(ctx context.Context, projectID uuid
 	return result, nil
 }
 
+// VerifyAssetFacts includes the title in the approved version's evidence boundary.
+func (uc *ContentUsecase) VerifyAssetFacts(ctx context.Context, projectID uuid.UUID, title, body string) (*QualityCheckResult, error) {
+	return uc.VerifyContentFacts(ctx, projectID, title+"\n"+body)
+}
+
 // CreateContentAsset creates a new content draft and performs auto fact validation
 func (uc *ContentUsecase) CreateContentAsset(ctx context.Context, projectID uuid.UUID, title, assetType, body string, brief map[string]interface{}) (*repository.ContentAssetModel, error) {
 	if brief == nil {
@@ -94,7 +106,7 @@ func (uc *ContentUsecase) CreateContentAsset(ctx context.Context, projectID uuid
 	if err != nil {
 		return nil, err
 	}
-	qc, err := uc.VerifyContentFacts(ctx, projectID, body)
+	qc, err := uc.VerifyAssetFacts(ctx, projectID, title, body)
 	if err != nil {
 		return nil, err
 	}

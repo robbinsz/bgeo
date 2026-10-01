@@ -64,6 +64,18 @@ func (r *CopilotRepository) ArchiveSession(ctx context.Context, id uuid.UUID) er
 	return r.db.WithContext(ctx).Model(&CopilotSessionModel{}).Where("id = ? AND project_id = ? AND user_id = ?", id, domain.ActorFrom(ctx).ProjectID, domain.ActorFrom(ctx).UserID).Update("is_archived", true).Error
 }
 
+func (r *CopilotRepository) RenameSession(ctx context.Context, id uuid.UUID, title string) error {
+	actor := domain.ActorFrom(ctx)
+	q := r.db.WithContext(ctx).Model(&CopilotSessionModel{}).Where("id = ? AND is_archived = false", id)
+	if actor.ProjectID != uuid.Nil {
+		q = q.Where("project_id = ?", actor.ProjectID)
+	}
+	if actor.UserID != uuid.Nil {
+		q = q.Where("user_id = ?", actor.UserID)
+	}
+	return q.Update("title", title).Error
+}
+
 // Message operations
 func (r *CopilotRepository) SaveMessage(ctx context.Context, msg *CopilotMessageModel) error {
 	if msg.ID == uuid.Nil {
@@ -140,7 +152,11 @@ func (r *CopilotRepository) ListAuditLogs(ctx context.Context, projectID uuid.UU
 	if limit <= 0 || limit > 100 {
 		limit = 50
 	}
-	err := r.db.WithContext(ctx).Where("project_id = ?", projectID).Order("executed_at desc").Limit(limit).Find(&logs).Error
+	q := r.db.WithContext(ctx).Where("project_id = ?", projectID)
+	if actor := domain.ActorFrom(ctx); actor.UserID != uuid.Nil {
+		q = q.Where("user_id = ?", actor.UserID)
+	}
+	err := q.Order("executed_at desc").Limit(limit).Find(&logs).Error
 	return logs, err
 }
 
@@ -159,6 +175,9 @@ func (r *CopilotRepository) ListExecutionTraces(ctx context.Context, projectID u
 		limit = 50
 	}
 	q := r.db.WithContext(ctx).Where("project_id = ?", projectID)
+	if actor := domain.ActorFrom(ctx); actor.UserID != uuid.Nil {
+		q = q.Where("session_id IN (?)", r.db.WithContext(ctx).Model(&CopilotSessionModel{}).Select("id").Where("project_id = ? AND user_id = ? AND is_archived = false", projectID, actor.UserID))
+	}
 	if sessionID != nil && *sessionID != uuid.Nil {
 		q = q.Where("session_id = ?", *sessionID)
 	}
@@ -171,6 +190,9 @@ func (r *CopilotRepository) GetExecutionTrace(ctx context.Context, id uuid.UUID)
 	q := r.db.WithContext(ctx).Where("id = ?", id)
 	if a := domain.ActorFrom(ctx); a.ProjectID != uuid.Nil {
 		q = q.Where("project_id = ?", a.ProjectID)
+		if a.UserID != uuid.Nil {
+			q = q.Where("session_id IN (?)", r.db.WithContext(ctx).Model(&CopilotSessionModel{}).Select("id").Where("project_id = ? AND user_id = ? AND is_archived = false", a.ProjectID, a.UserID))
+		}
 	}
 	err := q.First(&trace).Error
 	return &trace, err

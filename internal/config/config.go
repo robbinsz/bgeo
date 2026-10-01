@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/base64"
 	"fmt"
+	"net"
 	"os"
 	"strconv"
 	"strings"
@@ -13,7 +14,7 @@ import (
 type Config struct {
 	Environment, Mode, Address, DBDriver, DatabaseURL, SQLitePath string
 	AccessSecret, RefreshSecret, EncryptionKey                    string
-	AllowedOrigins                                                []string
+	AllowedOrigins, TrustedProxies                                []string
 	AutoMigrate, SeedDemo                                         bool
 	WorkerConcurrency                                             int
 	JobTimeout, LeaseDuration                                     time.Duration
@@ -27,6 +28,7 @@ func Load() (Config, error) {
 		AccessSecret: os.Getenv("JWT_ACCESS_SECRET"), RefreshSecret: os.Getenv("JWT_REFRESH_SECRET"),
 		EncryptionKey:  os.Getenv("CREDENTIAL_ENCRYPTION_KEY"),
 		AllowedOrigins: strings.FieldsFunc(os.Getenv("ALLOWED_ORIGINS"), func(r rune) bool { return r == ',' }),
+		TrustedProxies: strings.FieldsFunc(os.Getenv("TRUSTED_PROXIES"), func(r rune) bool { return r == ',' }),
 		AutoMigrate:    os.Getenv("AUTO_MIGRATE") == "true", SeedDemo: os.Getenv("SEED_DEMO") == "true",
 		WorkerConcurrency: 4, JobTimeout: 15 * time.Minute, LeaseDuration: time.Minute,
 	}
@@ -72,6 +74,15 @@ func Load() (Config, error) {
 		if c.AllowedOrigins[i] == "*" {
 			return c, fmt.Errorf("ALLOWED_ORIGINS cannot contain a wildcard")
 		}
+	}
+	for i, proxy := range c.TrustedProxies {
+		proxy = strings.TrimSpace(proxy)
+		if net.ParseIP(proxy) == nil {
+			if _, _, err := net.ParseCIDR(proxy); err != nil {
+				return c, fmt.Errorf("TRUSTED_PROXIES must contain IP addresses or CIDR ranges")
+			}
+		}
+		c.TrustedProxies[i] = proxy
 	}
 	return c, nil
 }

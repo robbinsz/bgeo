@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"github.com/google/uuid"
 	"github.com/robbinsz/bgeo/internal/config"
-	"github.com/robbinsz/bgeo/internal/delivery/ws"
 	"github.com/robbinsz/bgeo/internal/domain"
 	"github.com/robbinsz/bgeo/internal/repository"
 	"gorm.io/gorm"
@@ -21,10 +20,10 @@ type MonitorUsecase struct {
 	monitorRepo *repository.MonitorRepository
 	oppRepo     *repository.OpportunityRepository
 	connector   domain.AISearchConnector
-	hub         *ws.Hub
+	hub         domain.EventSink
 }
 
-func NewMonitorUsecase(m *repository.MonitorRepository, o *repository.OpportunityRepository, c domain.AISearchConnector, h *ws.Hub) *MonitorUsecase {
+func NewMonitorUsecase(m *repository.MonitorRepository, o *repository.OpportunityRepository, c domain.AISearchConnector, h domain.EventSink) *MonitorUsecase {
 	return &MonitorUsecase{m, o, c, h}
 }
 

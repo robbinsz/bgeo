@@ -33,3 +33,23 @@ func TestProductionRejectsUnsafeDefaults(t *testing.T) {
 		t.Fatal("production accepted demo")
 	}
 }
+
+func TestTrustedProxiesRequireExplicitIPAddressesOrNetworks(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("APP_MODE", "live")
+	t.Setenv("DB_DRIVER", "sqlite")
+	t.Setenv("SEED_DEMO", "false")
+	t.Setenv("CREDENTIAL_ENCRYPTION_KEY", "")
+	t.Setenv("TRUSTED_PROXIES", "")
+	if cfg, err := Load(); err != nil || len(cfg.TrustedProxies) != 0 {
+		t.Fatal("default must not trust forwarding headers", err)
+	}
+	t.Setenv("TRUSTED_PROXIES", "172.16.0.0/12, 127.0.0.1, ::1")
+	if cfg, err := Load(); err != nil || len(cfg.TrustedProxies) != 3 || cfg.TrustedProxies[1] != "127.0.0.1" {
+		t.Fatal("valid proxy addresses rejected", err)
+	}
+	t.Setenv("TRUSTED_PROXIES", "gateway")
+	if _, err := Load(); err == nil {
+		t.Fatal("proxy hostnames must not be accepted as trusted networks")
+	}
+}

@@ -309,6 +309,7 @@ type UserModel struct {
 	OrganizationID uuid.UUID `gorm:"type:uuid;index;not null" json:"organization_id"`
 	Email          string    `gorm:"size:120;uniqueIndex;not null" json:"email"`
 	PasswordHash   string    `gorm:"size:255;not null" json:"-"`
+	AuthVersion    int       `gorm:"not null;default:0" json:"-"`
 	Name           string    `gorm:"size:120;not null" json:"name"`
 	Role           string    `gorm:"size:32;default:'admin'" json:"role"`
 	Team           string    `gorm:"size:120;default:'增长团队'" json:"team"`
@@ -349,14 +350,15 @@ func (CopilotSessionModel) TableName() string {
 
 type CopilotMessageModel struct {
 	BaseGormModel
-	SessionID   uuid.UUID  `gorm:"type:uuid;index;not null" json:"session_id"`
-	Role        string     `gorm:"size:32;not null" json:"role"` // user, assistant, system, tool
-	Content     string     `gorm:"type:text" json:"content"`
-	ToolCalls   string     `gorm:"type:text" json:"tool_calls,omitempty"`   // JSON
-	CardType    string     `gorm:"size:64" json:"card_type,omitempty"`      // preview_publish, preview_schedule, insight_metric
-	CardPayload string     `gorm:"type:text" json:"card_payload,omitempty"` // JSON
-	CardStatus  string     `gorm:"size:32;default:''" json:"card_status"`   // pending, approved, rejected, executed
-	TraceID     *uuid.UUID `gorm:"type:uuid;index" json:"trace_id,omitempty"`
+	Session     *CopilotSessionModel `gorm:"foreignKey:SessionID;references:ID;constraint:OnDelete:RESTRICT" json:"-"`
+	SessionID   uuid.UUID            `gorm:"type:uuid;index;not null" json:"session_id"`
+	Role        string               `gorm:"size:32;not null" json:"role"` // user, assistant, system, tool
+	Content     string               `gorm:"type:text" json:"content"`
+	ToolCalls   string               `gorm:"type:text" json:"tool_calls,omitempty"`   // JSON
+	CardType    string               `gorm:"size:64" json:"card_type,omitempty"`      // preview_publish, preview_schedule, insight_metric
+	CardPayload string               `gorm:"type:text" json:"card_payload,omitempty"` // JSON
+	CardStatus  string               `gorm:"size:32;default:''" json:"card_status"`   // pending, approved, rejected, executed
+	TraceID     *uuid.UUID           `gorm:"type:uuid;index" json:"trace_id,omitempty"`
 }
 
 func (CopilotMessageModel) TableName() string {

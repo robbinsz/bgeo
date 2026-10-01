@@ -49,7 +49,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.GET("/jobs", func(c *gin.Context) {
 		items, err := repository.NewJobRepository(db).List(c.Request.Context(), projectID(c), 100)
@@ -57,7 +57,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.POST("/jobs/:id/cancel", func(c *gin.Context) {
 		id, _ := uuid.Parse(c.Param("id"))
@@ -73,7 +73,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.GET("/evolution/runs", func(c *gin.Context) {
 		var items []repository.EvolutionRunModel
@@ -81,15 +81,15 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.GET("/projects/facts/all", func(c *gin.Context) {
 		var items []repository.BrandFactModel
-		if err := db.WithContext(c.Request.Context()).Where("project_id = ?", projectID(c)).Order("created_at DESC").Limit(1000).Find(&items).Error; err != nil {
+		if err := db.WithContext(c.Request.Context()).Where("project_id = ?", projectID(c)).Order("created_at DESC").Scopes(repository.PageScope(c.Request.Context())).Find(&items).Error; err != nil {
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.POST("/projects/facts", func(c *gin.Context) {
 		var req struct {
@@ -156,7 +156,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			c.JSON(400, gin.H{"error": "version, title and body required"})
 			return
 		}
-		check, err := content.VerifyContentFacts(c.Request.Context(), projectID(c), req.Body)
+		check, err := content.VerifyAssetFacts(c.Request.Context(), projectID(c), req.Title, req.Body)
 		if err != nil {
 			respondError(c, err)
 			return
@@ -190,7 +190,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("id = ? AND project_id = ? AND version = ? AND status = 'pending_approval'", c.Param("id"), projectID(c), req.Version).First(&asset).Error; err != nil {
 				return err
 			}
-			check, err := usecase.NewContentUsecase(repository.NewContentRepository(tx), repository.NewProjectRepository(tx)).VerifyContentFacts(c.Request.Context(), projectID(c), asset.ContentBody)
+			check, err := usecase.NewContentUsecase(repository.NewContentRepository(tx), repository.NewProjectRepository(tx)).VerifyAssetFacts(c.Request.Context(), projectID(c), asset.Title, asset.ContentBody)
 			if err != nil {
 				return err
 			}
@@ -215,7 +215,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.POST("/channels", func(c *gin.Context) {
 		var req struct {
@@ -274,7 +274,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.POST("/publications/:id/reconcile", func(c *gin.Context) {
 		var publication repository.PublicationModel
@@ -318,7 +318,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.POST("/experiments", func(c *gin.Context) {
 		var req struct {
@@ -367,7 +367,7 @@ func registerOperations(r *gin.RouterGroup, db *gorm.DB, monitor *usecase.Monito
 			respondError(c, err)
 			return
 		}
-		c.JSON(200, gin.H{"items": items})
+		respondItems(c, items)
 	})
 	r.PUT("/members", func(c *gin.Context) {
 		var req struct {

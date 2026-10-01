@@ -6,29 +6,33 @@ import (
 )
 
 type ProjectMemberModel struct {
-	ProjectID uuid.UUID `gorm:"type:uuid;primaryKey" json:"project_id"`
-	UserID    uuid.UUID `gorm:"type:uuid;primaryKey" json:"user_id"`
-	Role      string    `gorm:"size:32;not null" json:"role"`
+	ProjectID uuid.UUID     `gorm:"type:uuid;primaryKey" json:"project_id"`
+	UserID    uuid.UUID     `gorm:"type:uuid;primaryKey" json:"user_id"`
+	Role      string        `gorm:"size:32;not null" json:"role"`
+	Project   *ProjectModel `gorm:"foreignKey:ProjectID;references:ID;constraint:OnDelete:RESTRICT" json:"-"`
+	User      *UserModel    `gorm:"foreignKey:UserID;references:ID;constraint:OnDelete:RESTRICT" json:"-"`
 }
 
 type JobModel struct {
 	BaseGormModel
-	RunID           *uuid.UUID `gorm:"type:uuid;index" json:"run_id,omitempty"`
-	ReservedSamples int        `json:"reserved_samples"`
-	ProjectID       uuid.UUID  `gorm:"type:uuid;index:idx_job_project;not null" json:"project_id"`
-	Kind            string     `gorm:"size:32;not null" json:"kind"`
-	Payload         string     `gorm:"type:text;not null" json:"-"`
-	Status          string     `gorm:"size:32;index:idx_job_ready;not null" json:"status"`
-	IdempotencyKey  string     `gorm:"size:200;uniqueIndex;not null" json:"idempotency_key"`
-	Attempts        int        `json:"attempts"`
-	MaxAttempts     int        `gorm:"default:3" json:"max_attempts"`
-	AvailableAt     time.Time  `gorm:"index:idx_job_ready" json:"available_at"`
-	LeaseUntil      *time.Time `gorm:"index" json:"lease_until,omitempty"`
-	LeaseToken      string     `gorm:"size:64" json:"-"`
-	HeartbeatAt     *time.Time `json:"heartbeat_at,omitempty"`
-	CompletedAt     *time.Time `json:"completed_at,omitempty"`
-	ErrorMessage    string     `gorm:"type:text" json:"error_message,omitempty"`
-	CancelRequested bool       `json:"cancel_requested"`
+	RunID           *uuid.UUID    `gorm:"type:uuid;index" json:"run_id,omitempty"`
+	ReservedSamples int           `json:"reserved_samples"`
+	ProjectID       uuid.UUID     `gorm:"type:uuid;index:idx_job_project;not null" json:"project_id"`
+	Kind            string        `gorm:"size:32;not null" json:"kind"`
+	Payload         string        `gorm:"type:text;not null" json:"-"`
+	Status          string        `gorm:"size:32;index:idx_job_ready;not null" json:"status"`
+	IdempotencyKey  string        `gorm:"size:200;uniqueIndex;not null" json:"idempotency_key"`
+	Attempts        int           `json:"attempts"`
+	MaxAttempts     int           `gorm:"default:3" json:"max_attempts"`
+	AvailableAt     time.Time     `gorm:"index:idx_job_ready" json:"available_at"`
+	LeaseUntil      *time.Time    `gorm:"index" json:"lease_until,omitempty"`
+	LeaseToken      string        `gorm:"size:64" json:"-"`
+	HeartbeatAt     *time.Time    `json:"heartbeat_at,omitempty"`
+	CompletedAt     *time.Time    `json:"completed_at,omitempty"`
+	ErrorMessage    string        `gorm:"type:text" json:"error_message,omitempty"`
+	CancelRequested bool          `json:"cancel_requested"`
+	ReconciledAt    *time.Time    `gorm:"index" json:"reconciled_at,omitempty"`
+	Project         *ProjectModel `gorm:"foreignKey:ProjectID;references:ID;constraint:OnDelete:RESTRICT" json:"-"`
 }
 
 type ScheduleModel struct {
