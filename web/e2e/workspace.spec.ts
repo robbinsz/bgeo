@@ -80,11 +80,12 @@ test('empty dashboards show unknown metrics and actual empty lists', async ({ pa
   await workspace(page);
   await page.goto('/overview');
   await expect(page.getByRole('heading', { name: 'GEO 运行总览' })).toBeVisible();
-  await expect(page.getByText('未设置监测计划')).toBeVisible();
-  await expect(page.getByText('暂无任务', { exact: true })).toBeVisible();
+  await expect(page.getByText('未设置定时调度计划')).toBeVisible();
+  await page.getByRole('button', { name: /持久任务队列/ }).click();
+  await expect(page.getByText('当前暂无排队或执行中的任务')).toBeVisible();
   await expect(page.getByText('34.8%')).toHaveCount(0);
   await page.goto('/strategy');
-  await expect(page.getByText('暂无符合条件的策略')).toBeVisible();
+  await expect(page.getByText('暂无策略任务，点击右上角新建策略')).toBeVisible();
   await expect(page.getByText('武汉家政品牌对比内容集群')).toHaveCount(0);
 });
 test('backend backlog status, risk filter and pagination work together', async ({ page }) => {
@@ -108,7 +109,7 @@ test('backend backlog status, risk filter and pagination work together', async (
   await page.goto('/strategy');
   await expect(page.getByRole('heading', { name: '真实策略' })).toBeVisible();
   await page.getByLabel('风险等级').selectOption('low');
-  await expect(page.getByText('暂无符合条件的策略')).toBeVisible();
+  await expect(page.getByText('未找到符合条件的策略任务')).toBeVisible();
   await page.getByLabel('风险等级').selectOption('high');
   await expect(page.getByRole('heading', { name: '真实策略' })).toBeVisible();
   await expect(page.getByRole('button', { name: '下一页' })).toBeDisabled();
@@ -117,7 +118,7 @@ test('viewer controls are disabled and failed reads remain visible', async ({ pa
   await workspace(page, { role: 'viewer', failedPath: '/monitor/queries' });
   await page.goto('/monitor');
   await expect(page.getByRole('button', { name: '＋ 新增问题' })).toBeDisabled();
-  await expect(page.getByRole('button', { name: '启动批次' })).toBeDisabled();
+  await expect(page.getByRole('button', { name: '启动监测批次' })).toBeDisabled();
   await expect(page.getByRole('alert').filter({ hasText: '测试数据库不可用' })).toBeVisible();
 });
 test('viewer can read Copilot history but cannot submit instructions or approve actions on mobile', async ({
@@ -172,7 +173,7 @@ test('task dialog traps focus and closes with Escape on mobile', async ({ page }
   await workspace(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto('/content');
-  const open = page.getByRole('button', { name: '＋ 新建草稿' });
+  const open = page.getByRole('button', { name: '新建草稿' });
   await expect(open).toBeEnabled();
   await open.click();
   const dialog = page.getByRole('dialog', { name: '创建内容草稿' });
